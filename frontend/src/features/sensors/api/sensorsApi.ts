@@ -4,6 +4,7 @@ import type {
   InterpolationMetric,
 } from '../model/interpolation'
 import type { InterpolationTimeline } from '../model/interpolationTimeline'
+import type { InterpolationTimestepMetricsSeries } from '../model/interpolationMetrics'
 import type { SensorHistorySeries, WeatherReading } from '../model/weatherReading'
 import {
   adaptBackendSensor,
@@ -45,6 +46,20 @@ interface BackendInterpolationTimelineResponse {
   active_indices: number[]
   timestamps: string[]
   frames: BackendInterpolationTimelineFrame[]
+}
+
+interface BackendTimestepMetricItem {
+  timestamp_utc: string
+  avg_aqi: number | null
+  avg_temperature_c: number | null
+  sensor_count_aqi: number
+  sensor_count_temperature: number
+}
+
+interface BackendInterpolationMetricsResponse {
+  date: string
+  count: number
+  items: BackendTimestepMetricItem[]
 }
 
 interface BackendInterpolationGridResponse {
@@ -197,6 +212,26 @@ function adaptInterpolationTimelinePayload(
   }
 }
 
+function adaptInterpolationMetricsPayload(
+  payload: BackendInterpolationMetricsResponse,
+): InterpolationTimestepMetricsSeries {
+  if (!Array.isArray(payload.items)) {
+    throw new Error('Interpolation metrics response is missing items array.')
+  }
+
+  return {
+    date: payload.date,
+    count: payload.count,
+    items: payload.items.map((item) => ({
+      timestampUtc: item.timestamp_utc,
+      avgAqi: item.avg_aqi,
+      avgTemperatureC: item.avg_temperature_c,
+      sensorCountAqi: item.sensor_count_aqi,
+      sensorCountTemperature: item.sensor_count_temperature,
+    })),
+  }
+}
+
 async function fetchBackendSensors(): Promise<BackendSensorListResponse> {
   const response = await fetch(`${API_BASE_URL}/sensors`)
   if (!response.ok) {
@@ -286,6 +321,37 @@ export async function getInterpolationTimeline(
 
   const payload = (await response.json()) as BackendInterpolationTimelineResponse
   return adaptInterpolationTimelinePayload(payload)
+}
+
+export async function getInterpolationTimestepMetrics(
+  date: string,
+  signal?: AbortSignal,
+): Promise<InterpolationTimestepMetricsSeries> {
+  const query = new URLSearchParams({
+    date,
+  })
+
+  const response = await fetch(`${API_BASE_URL}/interpolation/metrics?${query.toString()}`, {
+    signal,
+  })
+
+  if (!response.ok) {
+    let detail = `Failed to fetch interpolation metrics (${date}): ${response.status}`
+
+    try {
+      const errorPayload = (await response.json()) as { detail?: string }
+      if (typeof errorPayload.detail === 'string' && errorPayload.detail.length > 0) {
+        detail = errorPayload.detail
+      }
+    } catch {
+      // Keep default fallback message when backend did not return JSON.
+    }
+
+    throw new Error(detail)
+  }
+
+  const payload = (await response.json()) as BackendInterpolationMetricsResponse
+  return adaptInterpolationMetricsPayload(payload)
 }
 
 export async function getSensorHistoryById(

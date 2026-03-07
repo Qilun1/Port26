@@ -23,6 +23,7 @@ class Settings(BaseSettings):
 	supabase_api_key: str = Field(alias="SUPABASE_API_KEY")
 	supabase_sensors_table: str = "sensors"
 	supabase_sensor_readings_table: str = "sensor_readings"
+	supabase_metrics_table: str = "metrics"
 	interpolation_timeline_artifacts_dir: str = "data/interpolation_timelines"
 
 

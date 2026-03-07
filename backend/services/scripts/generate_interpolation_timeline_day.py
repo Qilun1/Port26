@@ -11,9 +11,11 @@ from config import get_settings
 from schemas import InterpolationMetric
 from services import (
     GridInterpolationService,
+    MetricsService,
     SensorPoint,
     SensorReadingsService,
     SensorService,
+    TimestepMetricInput,
 )
 from services.grid import derive_bbox_from_sensors
 from services.interpolation import extract_active_indices, extract_sparse_values
@@ -24,7 +26,8 @@ from services.interpolation.timeline_loader import InterpolationTimelineLoaderSe
 class _ReadingRow:
     sensor_id: int
     timestamp_utc: datetime
-    value: float | None
+    temperature: float | None
+    aqi: float | None
 
 
 def _parse_args() -> argparse.Namespace:
@@ -53,11 +56,10 @@ def _parse_row_timestamp(value: str) -> datetime:
     return datetime.fromisoformat(normalized).astimezone(UTC)
 
 
-def _load_metric_rows_for_day(
-    metric: InterpolationMetric,
+def _load_rows_for_day(
     day: date,
     timezone_name: str,
-) -> dict[tuple[int, datetime], float | None]:
+) -> dict[tuple[int, datetime], _ReadingRow]:
     settings = get_settings()
     sensor_service = SensorService(settings)
     readings_service = SensorReadingsService(settings)
@@ -70,7 +72,7 @@ def _load_metric_rows_for_day(
     day_start_local = datetime(day.year, day.month, day.day, tzinfo=tz)
     day_end_local = day_start_local + timedelta(days=1)
 
-    rows_by_key: dict[tuple[int, datetime], float | None] = {}
+    rows_by_key: dict[tuple[int, datetime], _ReadingRow] = {}
 
     for sensor in sensors:
         rows = readings_service.list_sensor_readings_by_sensor_id(sensor.id)
@@ -80,10 +82,15 @@ def _load_metric_rows_for_day(
             if not (day_start_local <= timestamp_local < day_end_local):
                 continue
 
-            raw_value = row["temperature"] if metric == InterpolationMetric.temperature else row["aqi"]
-            value = float(raw_value) if raw_value is not None else None
+            raw_temperature = row.get("temperature")
+            raw_aqi = row.get("aqi")
             rounded_utc = timestamp_utc.replace(second=0, microsecond=0)
-            rows_by_key[(sensor.id, rounded_utc)] = value
+            rows_by_key[(sensor.id, rounded_utc)] = _ReadingRow(
+                sensor_id=sensor.id,
+                timestamp_utc=rounded_utc,
+                temperature=float(raw_temperature) if raw_temperature is not None else None,
+                aqi=float(raw_aqi) if raw_aqi is not None else None,
+            )
 
     return rows_by_key
 
@@ -102,14 +109,14 @@ def main() -> None:
 
     sensor_service = SensorService(settings)
     interpolation_service = GridInterpolationService(settings)
+    metrics_service = MetricsService(settings)
     sensors = sensor_service.list_sensors()
 
     if not sensors:
         print("No enabled sensors found. Nothing to interpolate.")
         return
 
-    readings_by_key = _load_metric_rows_for_day(
-        metric=metric,
+    readings_by_key = _load_rows_for_day(
         day=selected_day,
         timezone_name=args.timezone,
     )
@@ -127,6 +134,7 @@ def main() -> None:
 
     frame_timestamps_local = _generate_timestamps_for_day(selected_day, args.timezone)
     frames: list[dict[str, object]] = []
+    timestep_metrics: list[TimestepMetricInput] = []
     static_mask: list[int] | None = None
     active_indices: list[int] | None = None
     rows = 0
@@ -136,10 +144,26 @@ def main() -> None:
         timestamp_utc = timestamp_local.astimezone(UTC).replace(second=0, microsecond=0)
 
         frame_sensors: list[SensorPoint] = []
+        frame_aqi_values: list[float] = []
+        frame_temperature_values: list[float] = []
         for sensor in sensors:
-            value = readings_by_key.get((sensor.id, timestamp_utc))
+            reading_row = readings_by_key.get((sensor.id, timestamp_utc))
+            if reading_row is None:
+                continue
+
+            if reading_row.aqi is not None:
+                frame_aqi_values.append(reading_row.aqi)
+            if reading_row.temperature is not None:
+                frame_temperature_values.append(reading_row.temperature)
+
+            value = (
+                reading_row.temperature
+                if metric == InterpolationMetric.temperature
+                else reading_row.aqi
+            )
             if value is None:
                 continue
+
             frame_sensors.append(
                 SensorPoint(
                     id=str(sensor.id),
@@ -148,6 +172,17 @@ def main() -> None:
                     value=value,
                 )
             )
+
+        timestep_metrics.append(
+            TimestepMetricInput(
+                date=selected_day,
+                timestamp_utc=timestamp_utc,
+                avg_aqi=(sum(frame_aqi_values) / len(frame_aqi_values)) if frame_aqi_values else None,
+                avg_temperature_c=(sum(frame_temperature_values) / len(frame_temperature_values)) if frame_temperature_values else None,
+                sensor_count_aqi=len(frame_aqi_values),
+                sensor_count_temperature=len(frame_temperature_values),
+            )
+        )
 
         if not frame_sensors:
             raise ValueError(
@@ -217,7 +252,10 @@ def main() -> None:
     with Path(output_path).open("w", encoding="utf-8") as file:
         json.dump(timeline_payload, file)
 
+    upserted_metrics = metrics_service.upsert_metrics_bulk(timestep_metrics)
+
     print(f"Wrote timeline artifact: {output_path}")
+    print(f"Upserted {upserted_metrics} rows into metrics table.")
     print(f"Frames: {len(frames)} | Grid: {rows}x{cols} | Metric: {metric.value}")
 
 

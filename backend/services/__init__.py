@@ -1,5 +1,6 @@
 from .sensor_service import SensorService
 from .sensor_readings_service import SensorReadingInput, SensorReadingsService
+from .metrics_service import MetricsService, TimestepMetricInput
 from .interpolation import (
 	GridInterpolationService,
 	InterpolatedGridCell,
@@ -15,6 +16,8 @@ __all__ = [
 	"SensorService",
 	"SensorReadingInput",
 	"SensorReadingsService",
+	"MetricsService",
+	"TimestepMetricInput",
 	"SensorPoint",
 	"InterpolatedGridCell",
 	"InterpolatedGridMatrix",

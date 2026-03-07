@@ -9,11 +9,14 @@ from schemas import (
     InterpolationTimelineResponse,
     InterpolationMaskedGridResponse,
     InterpolationMetric,
+    TimestepMetricItem,
+    TimestepMetricsResponse,
 )
 from services import (
     GridInterpolationService,
     InterpolationTimelineLoaderService,
     InterpolationTimelineNotFoundError,
+    MetricsService,
     SensorPoint,
     SensorService,
 )
@@ -35,6 +38,10 @@ def get_interpolation_service() -> GridInterpolationService:
 
 def get_timeline_loader_service() -> InterpolationTimelineLoaderService:
     return InterpolationTimelineLoaderService(get_settings())
+
+
+def get_metrics_service() -> MetricsService:
+    return MetricsService(get_settings())
 
 
 def parse_interpolation_query(
@@ -180,3 +187,34 @@ def get_interpolated_timeline(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
             detail=str(exc),
         ) from exc
+
+
+@router.get("/metrics", response_model=TimestepMetricsResponse)
+def get_interpolated_timestep_metrics(
+    date_value: date = Query(alias="date"),
+    metrics_service: MetricsService = Depends(get_metrics_service),
+) -> TimestepMetricsResponse:
+    try:
+        rows = metrics_service.list_metrics_by_date(date_value)
+    except Exception as exc:
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            detail="Could not fetch interpolation timestep metrics from data source.",
+        ) from exc
+
+    items = [
+        TimestepMetricItem(
+            timestamp_utc=str(row["timestamp_utc"]),
+            avg_aqi=row.get("avg_aqi"),
+            avg_temperature_c=row.get("avg_temperature_c"),
+            sensor_count_aqi=int(row.get("sensor_count_aqi") or 0),
+            sensor_count_temperature=int(row.get("sensor_count_temperature") or 0),
+        )
+        for row in rows
+    ]
+
+    return TimestepMetricsResponse(
+        date=date_value,
+        count=len(items),
+        items=items,
+    )

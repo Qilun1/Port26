@@ -148,3 +148,17 @@ class InterpolationTimelineResponse(BaseModel):
                 raise ValueError("frame timestamps must match top-level timestamps order.")
 
         return self
+
+
+class TimestepMetricItem(BaseModel):
+    timestamp_utc: datetime
+    avg_aqi: float | None
+    avg_temperature_c: float | None
+    sensor_count_aqi: int = Field(ge=0)
+    sensor_count_temperature: int = Field(ge=0)
+
+
+class TimestepMetricsResponse(BaseModel):
+    date: date
+    count: int = Field(ge=0)
+    items: list[TimestepMetricItem]

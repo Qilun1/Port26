@@ -2,6 +2,7 @@ import { useMemo } from 'react'
 import { Layer, Source } from 'react-map-gl/maplibre'
 import type { LayerProps } from 'react-map-gl/maplibre'
 import type { InterpolationMetric } from '../../features/sensors/model/interpolation'
+import type { ColorMode } from '../../features/sensors/model/colorMode'
 import type { InterpolationTimeline } from '../../features/sensors/model/interpolationTimeline'
 import {
   buildSparseSurfaceContext,
@@ -15,9 +16,17 @@ interface Props {
   timeline: InterpolationTimeline
   currentValues: ArrayLike<number>
   metric: InterpolationMetric
+  colorMode: ColorMode
+  relativeColorRange: number | null
 }
 
-export function InterpolationHeatmapLayer({ timeline, currentValues, metric }: Props) {
+export function InterpolationHeatmapLayer({
+  timeline,
+  currentValues,
+  metric,
+  colorMode,
+  relativeColorRange,
+}: Props) {
   const staticContext = useMemo(
     () =>
       buildSparseSurfaceContext(
@@ -34,8 +43,14 @@ export function InterpolationHeatmapLayer({ timeline, currentValues, metric }: P
     if (!staticContext) {
       return null
     }
-    return createSparseInterpolationSurface(staticContext, metric, currentValues)
-  }, [staticContext, metric, currentValues])
+    return createSparseInterpolationSurface(
+      staticContext,
+      metric,
+      colorMode,
+      currentValues,
+      relativeColorRange,
+    )
+  }, [staticContext, metric, colorMode, currentValues, relativeColorRange])
 
   if (!surface) {
     return null
@@ -48,6 +63,7 @@ export function InterpolationHeatmapLayer({ timeline, currentValues, metric }: P
     paint: {
       'raster-opacity': 0.66,
       'raster-resampling': 'linear',
+      'raster-fade-duration': 260,
     },
   }
 

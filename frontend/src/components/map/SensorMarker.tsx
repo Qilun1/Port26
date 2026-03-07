@@ -6,6 +6,7 @@ interface SensorMarkerProps {
   onHoverStart: (sensor: Sensor) => void
   onHoverEnd: () => void
   onClick: (sensor: Sensor) => void
+  isVisible: boolean
 }
 
 export function SensorMarker({
@@ -13,7 +14,12 @@ export function SensorMarker({
   onHoverStart,
   onHoverEnd,
   onClick,
+  isVisible,
 }: SensorMarkerProps) {
+  if (!isVisible) {
+    return null
+  }
+
   return (
     <Marker latitude={sensor.latitude} longitude={sensor.longitude} anchor="center">
       <button

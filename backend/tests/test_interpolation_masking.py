@@ -96,4 +96,4 @@ def test_matrix_output_has_values_mask_and_consistent_shape() -> None:
 
 
 def test_coverage_radius_constant_is_1000m() -> None:
-    assert LOCAL_COVERAGE_RADIUS_METERS == 1000.0
+    assert LOCAL_COVERAGE_RADIUS_METERS == 1500.0

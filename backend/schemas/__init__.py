@@ -7,6 +7,8 @@ from .interpolation import (
 	InterpolationGridQuery,
 	InterpolationGridResponse,
 	InterpolationMetric,
+	TimestepMetricItem,
+	TimestepMetricsResponse,
 )
 from .sensor import (
 	SensorHistoryReadingItem,
@@ -28,4 +30,6 @@ __all__ = [
 	"InterpolationMaskedGridResponse",
 	"InterpolationGridPoint",
 	"InterpolationGridResponse",
+	"TimestepMetricItem",
+	"TimestepMetricsResponse",
 ]

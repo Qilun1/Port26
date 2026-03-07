@@ -1,11 +1,20 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { Popup } from 'react-map-gl/maplibre'
+import {
+  MdAir,
+  MdDeviceThermostat,
+  MdOutlinePalette,
+  MdSensors,
+  MdTerrain,
+} from 'react-icons/md'
+import { Popup, useMap } from 'react-map-gl/maplibre'
 import {
   getInterpolationTimeline,
+  getInterpolationTimestepMetrics,
   getSensorHistoryById,
   listSensors,
 } from '../../features/sensors/api/sensorsApi'
 import { toWeatherReading } from '../../features/sensors/api/sensorAdapter'
+import type { ColorMode } from '../../features/sensors/model/colorMode'
 import type { InterpolationMetric } from '../../features/sensors/model/interpolation'
 import type { InterpolationTimeline } from '../../features/sensors/model/interpolationTimeline'
 import type { Sensor } from '../../features/sensors/model/sensor'
@@ -14,22 +23,44 @@ import {
   getOrCreateMinuteFrameValues,
   MINUTES_PER_DAY,
   PLAYBACK_SIMULATED_MINUTES_PER_SECOND,
+  resolveMinuteFrameBlendWindow,
 } from '../../features/sensors/utils/timelinePlayback'
 import type { SensorHistoryPoint } from '../../features/sensors/model/weatherReading'
+import type { InterpolationTimestepMetricsSeries } from '../../features/sensors/model/interpolationMetrics'
 import { InterpolationHeatmapLayer } from './InterpolationHeatmapLayer'
+import { Surface3DLayer } from './Surface3DLayer'
+import { ColorBarLegend } from './ColorBarLegend'
 import { SensorHistoryPanel } from './SensorHistoryPanel'
 import { SensorMarker } from './SensorMarker'
 import { SensorTooltip } from './SensorTooltip'
 import { TimelineControls } from './TimelineControls'
+import { TimelineMetricsSeries } from './TimelineMetricsSeries'
+import type { ViewMode } from '../../features/sensors/model/viewMode'
+import { computeFrameMean, computeRelativeRange } from '../../lib/map/colorScales'
 
 const METRICS: InterpolationMetric[] = ['temperature', 'aqi']
 const METRIC_LABELS: Record<InterpolationMetric, string> = {
   temperature: 'Temperature',
-  aqi: 'Air quality index',
+  aqi: 'Air Quality',
 }
 const TIMELINE_DATE = import.meta.env.VITE_TIMELINE_DATE ?? '2026-03-07'
+const SURFACE_PITCH = 58
+const SURFACE_BEARING = -18
+const PLAYBACK_SPEED_STEP_MINUTES: Record<1 | 2 | 4, number> = {
+  1: 1,
+  2: 2,
+  4: 4,
+}
+
+const PLAYBACK_SPEED_MULTIPLIERS: Record<0 | 1 | 2 | 4, number> = {
+  0: 0,
+  1: 1,
+  2: 2,
+  4: 4,
+}
 
 export function SensorLayer() {
+  const mapCollection = useMap()
   const [sensors, setSensors] = useState<Sensor[]>([])
   const [hoveredSensor, setHoveredSensor] = useState<Sensor | null>(null)
   const [selectedSensor, setSelectedSensor] = useState<Sensor | null>(null)
@@ -50,14 +81,23 @@ export function SensorLayer() {
   const [timelineErrorsByMetric, setTimelineErrorsByMetric] = useState<
     Partial<Record<InterpolationMetric, string | null>>
   >({})
+  const [metricsByDate, setMetricsByDate] = useState<Record<string, InterpolationTimestepMetricsSeries>>({})
+  const [metricsInFlightByDate, setMetricsInFlightByDate] = useState<Record<string, boolean>>({})
+  const [metricsErrorsByDate, setMetricsErrorsByDate] = useState<Record<string, string | null>>({})
   const [currentMinuteIndex, setCurrentMinuteIndex] = useState(0)
-  const [isPlaying, setIsPlaying] = useState(false)
+  const [playbackSpeed, setPlaybackSpeed] = useState<0 | 1 | 2 | 4>(0)
+  const [viewMode, setViewMode] = useState<ViewMode>('2d')
+  const [sensorsVisible, setSensorsVisible] = useState(true)
+  const [colorMode, setColorMode] = useState<ColorMode>('absolute')
 
   const activeMetricRef = useRef<InterpolationMetric | null>(null)
   const timelineCacheRef = useRef<Partial<Record<InterpolationMetric, InterpolationTimeline>>>({})
   const timelineControllersRef = useRef<Partial<Record<InterpolationMetric, AbortController>>>({})
+  const metricsCacheRef = useRef<Record<string, InterpolationTimestepMetricsSeries>>({})
+  const metricsControllerRef = useRef<AbortController | null>(null)
   const historyControllerRef = useRef<AbortController | null>(null)
   const playbackMinuteCursorRef = useRef(0)
+  const lastNonZeroPlaybackSpeedRef = useRef<1 | 2 | 4>(1)
   const minuteFrameCacheByMetricRef = useRef<
     Partial<Record<InterpolationMetric, Map<number, ArrayLike<number>>>>
   >({})
@@ -69,6 +109,10 @@ export function SensorLayer() {
   useEffect(() => {
     timelineCacheRef.current = timelineByMetric
   }, [timelineByMetric])
+
+  useEffect(() => {
+    metricsCacheRef.current = metricsByDate
+  }, [metricsByDate])
 
   useEffect(() => {
     setIsLoading(true)
@@ -86,6 +130,7 @@ export function SensorLayer() {
       for (const controller of Object.values(timelineControllersRef.current)) {
         controller?.abort()
       }
+      metricsControllerRef.current?.abort()
       historyControllerRef.current?.abort()
     }
   }, [])
@@ -143,6 +188,55 @@ export function SensorLayer() {
       })
   }, [])
 
+  const startMetricsLoad = useCallback((timelineDate: string) => {
+    if (metricsControllerRef.current) {
+      return
+    }
+
+    if (metricsCacheRef.current[timelineDate]) {
+      return
+    }
+
+    const controller = new AbortController()
+    metricsControllerRef.current = controller
+
+    setMetricsInFlightByDate((current) => ({
+      ...current,
+      [timelineDate]: true,
+    }))
+
+    void getInterpolationTimestepMetrics(timelineDate, controller.signal)
+      .then((series) => {
+        setMetricsByDate((current) => ({
+          ...current,
+          [timelineDate]: series,
+        }))
+
+        setMetricsErrorsByDate((current) => ({
+          ...current,
+          [timelineDate]: null,
+        }))
+      })
+      .catch((error: unknown) => {
+        if (controller.signal.aborted) {
+          return
+        }
+
+        const message = error instanceof Error ? error.message : 'Failed to load aggregate metrics.'
+        setMetricsErrorsByDate((current) => ({
+          ...current,
+          [timelineDate]: message,
+        }))
+      })
+      .finally(() => {
+        metricsControllerRef.current = null
+        setMetricsInFlightByDate((current) => ({
+          ...current,
+          [timelineDate]: false,
+        }))
+      })
+  }, [])
+
   const handleMetricSelect = useCallback(
     (metric: InterpolationMetric) => {
       setActiveMetric(metric)
@@ -150,6 +244,8 @@ export function SensorLayer() {
         ...current,
         [metric]: null,
       }))
+
+      startMetricsLoad(TIMELINE_DATE)
 
       const cachedTimeline = timelineCacheRef.current[metric]
       if (cachedTimeline) {
@@ -161,7 +257,7 @@ export function SensorLayer() {
 
       startTimelineLoad(metric)
     },
-    [startTimelineLoad],
+    [startTimelineLoad, startMetricsLoad],
   )
 
   const handleHoverStart = useCallback((sensor: Sensor) => {
@@ -239,12 +335,15 @@ export function SensorLayer() {
   }, [activeTimeline, renderedMetric, currentMinuteIndex])
 
   useEffect(() => {
-    if (!isPlaying || minuteCount === 0) {
+    if (playbackSpeed === 0 || minuteCount === 0) {
       return
     }
 
     let animationFrameId = 0
     let previousTick: number | null = null
+    let simulatedMinutesCarry = 0
+    const speedMultiplier = PLAYBACK_SPEED_MULTIPLIERS[playbackSpeed]
+    const playbackStepMinutes = PLAYBACK_SPEED_STEP_MINUTES[playbackSpeed]
 
     const tick = (timestampMs: number) => {
       if (previousTick === null) {
@@ -256,13 +355,19 @@ export function SensorLayer() {
       const elapsedSeconds = (timestampMs - previousTick) / 1000
       previousTick = timestampMs
 
-      playbackMinuteCursorRef.current =
-        (playbackMinuteCursorRef.current
-          + (elapsedSeconds * PLAYBACK_SIMULATED_MINUTES_PER_SECOND))
-        % MINUTES_PER_DAY
+      simulatedMinutesCarry += elapsedSeconds * PLAYBACK_SIMULATED_MINUTES_PER_SECOND * speedMultiplier
+      const elapsedWholeMinutes = Math.floor(simulatedMinutesCarry)
 
-      const nextMinuteIndex = Math.floor(playbackMinuteCursorRef.current)
-      setCurrentMinuteIndex((current) => (current === nextMinuteIndex ? current : nextMinuteIndex))
+      if (elapsedWholeMinutes > 0) {
+        simulatedMinutesCarry -= elapsedWholeMinutes
+        const deltaMinutes = elapsedWholeMinutes * playbackStepMinutes
+
+        setCurrentMinuteIndex((current) => {
+          const nextMinuteIndex = (current + deltaMinutes) % MINUTES_PER_DAY
+          playbackMinuteCursorRef.current = nextMinuteIndex
+          return nextMinuteIndex
+        })
+      }
 
       animationFrameId = window.requestAnimationFrame(tick)
     }
@@ -272,13 +377,13 @@ export function SensorLayer() {
     return () => {
       window.cancelAnimationFrame(animationFrameId)
     }
-  }, [isPlaying, minuteCount])
+  }, [playbackSpeed, minuteCount])
 
   useEffect(() => {
     if (minuteCount === 0) {
       setCurrentMinuteIndex(0)
       playbackMinuteCursorRef.current = 0
-      setIsPlaying(false)
+      setPlaybackSpeed(0)
       return
     }
 
@@ -299,40 +404,205 @@ export function SensorLayer() {
     setCurrentMinuteIndex(clamped)
   }, [])
 
-  const handleTogglePlay = useCallback(() => {
+  const handleChangePlaybackSpeed = useCallback((nextSpeed: 1 | 2 | 4) => {
     if (minuteCount === 0) {
       return
     }
 
-    setIsPlaying((current) => !current)
+    lastNonZeroPlaybackSpeedRef.current = nextSpeed
+    setPlaybackSpeed(nextSpeed)
+  }, [minuteCount])
+
+  const handleTogglePlayback = useCallback(() => {
+    if (minuteCount === 0) {
+      return
+    }
+
+    setPlaybackSpeed((current) => {
+      if (current === 0) {
+        return lastNonZeroPlaybackSpeedRef.current
+      }
+      return 0
+    })
   }, [minuteCount])
 
   const reading = hoveredSensor ? toWeatherReading(hoveredSensor) : null
   const isTimelineLoading = activeMetric ? Boolean(timelineInFlightByMetric[activeMetric]) : false
   const timelineError = activeMetric ? (timelineErrorsByMetric[activeMetric] ?? null) : null
+  const metricsSeries = metricsByDate[TIMELINE_DATE] ?? null
+  const metricsError = metricsErrorsByDate[TIMELINE_DATE] ?? null
+  const isMetricsLoading = Boolean(metricsInFlightByDate[TIMELINE_DATE])
   const selectedHistory = selectedSensor ? (historyPointsBySensor[selectedSensor.id] ?? []) : []
+
+  const currentHeightAnchorValue = useMemo<number | null>(() => {
+    if (!renderedMetric || !metricsSeries || metricsSeries.items.length === 0) {
+      return null
+    }
+
+    const frameCount = metricsSeries.items.length
+    const { startFrameIndex, endFrameIndex, t } = resolveMinuteFrameBlendWindow(
+      currentMinuteIndex,
+      frameCount,
+    )
+
+    const startPoint = metricsSeries.items[startFrameIndex]
+    const endPoint = metricsSeries.items[endFrameIndex] ?? startPoint
+
+    const startValue = renderedMetric === 'aqi' ? startPoint?.avgAqi : startPoint?.avgTemperatureC
+    const endValue = renderedMetric === 'aqi' ? endPoint?.avgAqi : endPoint?.avgTemperatureC
+
+    if (typeof startValue === 'number' && typeof endValue === 'number') {
+      return startValue + ((endValue - startValue) * t)
+    }
+
+    if (typeof startValue === 'number') {
+      return startValue
+    }
+
+    if (typeof endValue === 'number') {
+      return endValue
+    }
+
+    return null
+  }, [currentMinuteIndex, metricsSeries, renderedMetric])
+
+  const timelineValueRange = useMemo<{ minValue: number; maxValue: number } | null>(() => {
+    if (!activeTimeline || activeTimeline.frames.length === 0) {
+      return null
+    }
+
+    let minValue = Number.POSITIVE_INFINITY
+    let maxValue = Number.NEGATIVE_INFINITY
+
+    for (const frame of activeTimeline.frames) {
+      for (const value of frame.values) {
+        if (!Number.isFinite(value)) {
+          continue
+        }
+        minValue = Math.min(minValue, value)
+        maxValue = Math.max(maxValue, value)
+      }
+    }
+
+    if (!Number.isFinite(minValue) || !Number.isFinite(maxValue)) {
+      return null
+    }
+
+    return { minValue, maxValue }
+  }, [activeTimeline])
+
+  const stableRelativeColorRange = useMemo<number | null>(() => {
+    if (!activeTimeline || !renderedMetric || activeTimeline.frames.length === 0) {
+      return null
+    }
+
+    let maxRange = 0
+
+    for (const frame of activeTimeline.frames) {
+      const frameMean = computeFrameMean(frame.values)
+      const frameRange = computeRelativeRange(frame.values, frameMean, renderedMetric)
+      if (frameRange > maxRange) {
+        maxRange = frameRange
+      }
+    }
+
+    return maxRange > 0 ? maxRange : null
+  }, [activeTimeline, renderedMetric])
+
+  useEffect(() => {
+    const map = mapCollection.current?.getMap()
+    if (!map) {
+      return
+    }
+
+    if (viewMode === '3d') {
+      map.easeTo({
+        pitch: SURFACE_PITCH,
+        bearing: SURFACE_BEARING,
+        duration: 400,
+      })
+      return
+    }
+
+    map.easeTo({
+      pitch: 0,
+      bearing: 0,
+      duration: 300,
+    })
+  }, [mapCollection, viewMode])
 
   return (
     <>
-      {renderedMetric && activeTimeline && (
+      {viewMode === '2d' && renderedMetric && activeTimeline && (
         <InterpolationHeatmapLayer
           timeline={activeTimeline}
           currentValues={currentFrameValues}
           metric={renderedMetric}
+          colorMode={colorMode}
+          relativeColorRange={stableRelativeColorRange}
+        />
+      )}
+
+      {renderedMetric && activeTimeline && (
+        <Surface3DLayer
+          timeline={activeTimeline}
+          currentValues={currentFrameValues}
+          metric={renderedMetric}
+          colorMode={colorMode}
+          relativeColorRange={stableRelativeColorRange}
+          heightAnchorValue={currentHeightAnchorValue}
+          visible={viewMode === '3d'}
         />
       )}
 
       <div className="metric-controls" role="group" aria-label="Interpolation metric selector">
-        {METRICS.map((metric) => (
-          <button
-            key={metric}
-            type="button"
-            className={`metric-controls__button${metric === activeMetric ? ' metric-controls__button--active' : ''}`}
-            onClick={() => handleMetricSelect(metric)}
-          >
-            {METRIC_LABELS[metric]}
-          </button>
-        ))}
+        <div className="metric-controls__segmented" role="group" aria-label="Metric selector">
+          {METRICS.map((metric) => (
+            <button
+              key={metric}
+              type="button"
+              className={`metric-controls__segment-button metric-controls__segment-button--${metric}${metric === activeMetric ? ' metric-controls__segment-button--active' : ''}`}
+              onClick={() => handleMetricSelect(metric)}
+              title={METRIC_LABELS[metric]}
+            >
+              {metric === 'temperature' ? <MdDeviceThermostat aria-hidden="true" /> : <MdAir aria-hidden="true" />}
+              <span>{metric === 'temperature' ? 'Temp' : 'AQI'}</span>
+            </button>
+          ))}
+        </div>
+
+        <div className="metric-controls__divider" aria-hidden="true" />
+
+        <button
+          type="button"
+          className={`metric-controls__button${sensorsVisible ? ' metric-controls__button--active' : ''}`}
+          onClick={() => setSensorsVisible(!sensorsVisible)}
+          title={sensorsVisible ? 'Hide sensors' : 'Show sensors'}
+        >
+          <span className="metric-controls__button-label">Sensors: {sensorsVisible ? 'On' : 'Off'}</span>
+          <span className="metric-controls__button-icon" aria-hidden="true"><MdSensors /></span>
+        </button>
+
+        <button
+          type="button"
+          className="metric-controls__button"
+          onClick={() => setColorMode((current) => (current === 'absolute' ? 'relative' : 'absolute'))}
+          title="Relative mode highlights neighborhoods warmer or cooler than the city average."
+        >
+          <span className="metric-controls__button-label">Color: {colorMode === 'absolute' ? 'Absolute' : 'Relative'}</span>
+          <span className="metric-controls__button-icon" aria-hidden="true"><MdOutlinePalette /></span>
+        </button>
+
+        <button
+          type="button"
+          className="metric-controls__button"
+          onClick={() => setViewMode((current) => (current === '2d' ? '3d' : '2d'))}
+          disabled={!activeTimeline}
+          title="Toggle 2D/3D view"
+        >
+          <span className="metric-controls__button-label">View: {viewMode === '2d' ? '2D Heatmap' : '3D Surface'}</span>
+          <span className="metric-controls__button-icon" aria-hidden="true"><MdTerrain /></span>
+        </button>
 
         <div className="metric-controls__status" aria-live="polite">
           {isTimelineLoading && 'Loading timeline...'}
@@ -348,15 +618,29 @@ export function SensorLayer() {
       </div>
 
       {activeTimeline && (
-        <TimelineControls
-          minuteCount={minuteCount}
-          currentMinuteIndex={currentMinuteIndex}
-          isPlaying={isPlaying}
-          isLoading={isTimelineLoading}
-          error={timelineError}
-          onSeek={handleSeek}
-          onTogglePlay={handleTogglePlay}
-        />
+        <>
+          <div className="timeline-floating-controls">
+            <TimelineControls
+              minuteCount={minuteCount}
+              currentMinuteIndex={currentMinuteIndex}
+              playbackSpeed={playbackSpeed}
+              isLoading={isTimelineLoading}
+              onTogglePlayback={handleTogglePlayback}
+              onChangePlaybackSpeed={handleChangePlaybackSpeed}
+            />
+          </div>
+
+          {renderedMetric && (
+            <TimelineMetricsSeries
+              metric={renderedMetric}
+              series={metricsSeries}
+              currentMinuteIndex={currentMinuteIndex}
+              isLoading={isMetricsLoading}
+              error={metricsError}
+              onSeek={handleSeek}
+            />
+          )}
+        </>
       )}
 
       {sensors.map((sensor) => (
@@ -366,6 +650,7 @@ export function SensorLayer() {
           onHoverStart={handleHoverStart}
           onHoverEnd={handleHoverEnd}
           onClick={handleSensorClick}
+          isVisible={sensorsVisible}
         />
       ))}
 
@@ -394,6 +679,17 @@ export function SensorLayer() {
           isLoading={historyLoading}
           error={historyError}
           onClose={handlePanelClose}
+        />
+      )}
+
+      {renderedMetric && activeTimeline && timelineValueRange && (
+        <ColorBarLegend
+          metric={renderedMetric}
+          colorMode={colorMode}
+          currentValues={currentFrameValues}
+          relativeColorRange={stableRelativeColorRange}
+          minValue={timelineValueRange.minValue}
+          maxValue={timelineValueRange.maxValue}
         />
       )}
     </>
