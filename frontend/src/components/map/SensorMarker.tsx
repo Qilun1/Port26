@@ -5,12 +5,14 @@ interface SensorMarkerProps {
   sensor: Sensor
   onHoverStart: (sensor: Sensor) => void
   onHoverEnd: () => void
+  onClick: (sensor: Sensor) => void
 }
 
 export function SensorMarker({
   sensor,
   onHoverStart,
   onHoverEnd,
+  onClick,
 }: SensorMarkerProps) {
   return (
     <Marker latitude={sensor.latitude} longitude={sensor.longitude} anchor="center">
@@ -20,6 +22,7 @@ export function SensorMarker({
         aria-label={`Sensor ${sensor.name}`}
         onMouseEnter={() => onHoverStart(sensor)}
         onMouseLeave={onHoverEnd}
+        onClick={() => onClick(sensor)}
       />
     </Marker>
   )

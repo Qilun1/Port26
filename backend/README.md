@@ -33,6 +33,14 @@ uv run uvicorn main:app --reload
 -- from backend/sql/001_create_sensors_table.sql
 ```
 
+6. To enable historical time-series readings, also run:
+
+```sql
+-- backend/sql/004_add_enabled_column.sql
+-- backend/sql/005_create_sensor_readings_table.sql
+-- backend/sql/006_sync_latest_fields_from_readings.sql
+```
+
 ## Project Layout
 
 - `main.py`: FastAPI app entrypoint and router registration.
@@ -52,6 +60,20 @@ uv run uvicorn main:app --reload
 ```bash
 uv add <package>
 ```
+
+## Generate Simulated Sensor Readings
+
+Generate one day of synthetic AQI and temperature series for all enabled sensors.
+
+```bash
+uv run python services/scripts/generate_sensor_readings_day.py --date 2026-03-07
+```
+
+Useful options:
+- `--dry-run`: preview generated rows without writing
+- `--timezone Europe/Helsinki`: local cycle and rush-hour anchoring (default)
+- `--interval-minutes 15`: 96 rows per sensor per day
+- `--seed 26026`: deterministic output
 
 ## Implemented Endpoints
 

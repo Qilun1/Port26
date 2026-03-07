@@ -6,11 +6,18 @@ from .interpolation import (
 	InterpolationGridResponse,
 	InterpolationMetric,
 )
-from .sensor import SensorListItem, SensorListResponse
+from .sensor import (
+	SensorHistoryReadingItem,
+	SensorHistoryResponse,
+	SensorListItem,
+	SensorListResponse,
+)
 
 __all__ = [
 	"SensorListItem",
 	"SensorListResponse",
+	"SensorHistoryReadingItem",
+	"SensorHistoryResponse",
 	"InterpolationMetric",
 	"InterpolationGridQuery",
 	"InterpolationBoundingBox",

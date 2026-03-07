@@ -1,5 +1,9 @@
 import type { Sensor } from '../model/sensor'
-import type { WeatherReading } from '../model/weatherReading'
+import type {
+  SensorHistoryPoint,
+  SensorHistorySeries,
+  WeatherReading,
+} from '../model/weatherReading'
 
 export interface BackendSensorListItem {
   id: number
@@ -17,6 +21,18 @@ export interface BackendSensorListResponse {
   count: number
 }
 
+export interface BackendSensorHistoryReadingItem {
+  timestamp: string
+  aqi: number | null
+  temperature: number | null
+}
+
+export interface BackendSensorHistoryResponse {
+  sensor_id: number
+  readings: BackendSensorHistoryReadingItem[]
+  count: number
+}
+
 export function adaptBackendSensor(item: BackendSensorListItem): Sensor {
   return {
     id: String(item.id),
@@ -26,6 +42,21 @@ export function adaptBackendSensor(item: BackendSensorListItem): Sensor {
     latestTemperatureC: item.latest_temperature_c,
     latestAirPressureHpa: item.latest_air_pressure_hpa,
     latestAqi: item.latest_aqi,
+  }
+}
+
+export function adaptBackendSensorHistory(
+  payload: BackendSensorHistoryResponse,
+): SensorHistorySeries {
+  const points: SensorHistoryPoint[] = payload.readings.map((reading) => ({
+    timestamp: reading.timestamp,
+    aqi: reading.aqi,
+    temperature: reading.temperature,
+  }))
+
+  return {
+    sensorId: String(payload.sensor_id),
+    points,
   }
 }
 

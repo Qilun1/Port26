@@ -7,3 +7,14 @@ export interface WeatherReading {
   aqi?: number | null
   timestamp: string | null
 }
+
+export interface SensorHistoryPoint {
+  timestamp: string
+  aqi: number | null
+  temperature: number | null
+}
+
+export interface SensorHistorySeries {
+  sensorId: string
+  points: SensorHistoryPoint[]
+}

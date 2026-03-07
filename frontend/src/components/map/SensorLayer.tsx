@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import { Popup } from 'react-map-gl/maplibre'
 import {
   getInterpolatedGrid,
+  getSensorHistoryById,
   listSensors,
 } from '../../features/sensors/api/sensorsApi'
 import { toWeatherReading } from '../../features/sensors/api/sensorAdapter'
@@ -10,7 +11,9 @@ import type {
   InterpolationMetric,
 } from '../../features/sensors/model/interpolation'
 import type { Sensor } from '../../features/sensors/model/sensor'
+import type { SensorHistoryPoint } from '../../features/sensors/model/weatherReading'
 import { InterpolationHeatmapLayer } from './InterpolationHeatmapLayer'
+import { SensorHistoryPanel } from './SensorHistoryPanel'
 import { SensorMarker } from './SensorMarker'
 import { SensorTooltip } from './SensorTooltip'
 
@@ -23,6 +26,12 @@ const METRIC_LABELS: Record<InterpolationMetric, string> = {
 export function SensorLayer() {
   const [sensors, setSensors] = useState<Sensor[]>([])
   const [hoveredSensor, setHoveredSensor] = useState<Sensor | null>(null)
+  const [selectedSensor, setSelectedSensor] = useState<Sensor | null>(null)
+  const [historyPointsBySensor, setHistoryPointsBySensor] = useState<
+    Record<string, SensorHistoryPoint[]>
+  >({})
+  const [historyLoading, setHistoryLoading] = useState(false)
+  const [historyError, setHistoryError] = useState<string | null>(null)
   const [isLoading, setIsLoading] = useState(true)
   const [activeMetric, setActiveMetric] = useState<InterpolationMetric | null>(null)
   const [displayMetric, setDisplayMetric] = useState<InterpolationMetric | null>(null)
@@ -39,6 +48,7 @@ export function SensorLayer() {
   const activeMetricRef = useRef<InterpolationMetric | null>(null)
   const cacheRef = useRef<Partial<Record<InterpolationMetric, InterpolatedGrid>>>({})
   const controllersRef = useRef<Partial<Record<InterpolationMetric, AbortController>>>({})
+  const historyControllerRef = useRef<AbortController | null>(null)
 
   useEffect(() => {
     activeMetricRef.current = activeMetric
@@ -64,6 +74,7 @@ export function SensorLayer() {
       for (const controller of Object.values(controllersRef.current)) {
         controller?.abort()
       }
+      historyControllerRef.current?.abort()
     }
   }, [])
 
@@ -142,11 +153,59 @@ export function SensorLayer() {
     setHoveredSensor(null)
   }, [])
 
+  const handleSensorClick = useCallback((sensor: Sensor) => {
+    setSelectedSensor(sensor)
+    setHistoryError(null)
+
+    historyControllerRef.current?.abort()
+
+    const cached = historyPointsBySensor[sensor.id]
+    if (cached) {
+      setHistoryLoading(false)
+      return
+    }
+
+    const controller = new AbortController()
+    historyControllerRef.current = controller
+
+    setHistoryLoading(true)
+
+    void getSensorHistoryById(Number(sensor.id), controller.signal)
+      .then((series) => {
+        setHistoryPointsBySensor((current) => ({
+          ...current,
+          [sensor.id]: series.points,
+        }))
+      })
+      .catch((error: unknown) => {
+        if (controller.signal.aborted) {
+          return
+        }
+
+        setHistoryError(
+          error instanceof Error ? error.message : 'Failed to load historical readings.',
+        )
+      })
+      .finally(() => {
+        if (!controller.signal.aborted) {
+          setHistoryLoading(false)
+        }
+      })
+  }, [historyPointsBySensor])
+
+  const handlePanelClose = useCallback(() => {
+    historyControllerRef.current?.abort()
+    setSelectedSensor(null)
+    setHistoryLoading(false)
+    setHistoryError(null)
+  }, [])
+
   const reading = hoveredSensor ? toWeatherReading(hoveredSensor) : null
   const isGridLoading = activeMetric ? Boolean(inFlightByMetric[activeMetric]) : false
   const gridError = activeMetric ? (errorsByMetric[activeMetric] ?? null) : null
   const renderedMetric = displayMetric && gridByMetric[displayMetric] ? displayMetric : null
   const activeGrid = renderedMetric ? (gridByMetric[renderedMetric] ?? null) : null
+  const selectedHistory = selectedSensor ? (historyPointsBySensor[selectedSensor.id] ?? []) : []
 
   return (
     <>
@@ -185,6 +244,7 @@ export function SensorLayer() {
           sensor={sensor}
           onHoverStart={handleHoverStart}
           onHoverEnd={handleHoverEnd}
+          onClick={handleSensorClick}
         />
       ))}
 
@@ -204,6 +264,16 @@ export function SensorLayer() {
             isLoading={isLoading}
           />
         </Popup>
+      )}
+
+      {selectedSensor && (
+        <SensorHistoryPanel
+          sensor={selectedSensor}
+          points={selectedHistory}
+          isLoading={historyLoading}
+          error={historyError}
+          onClose={handlePanelClose}
+        />
       )}
     </>
   )

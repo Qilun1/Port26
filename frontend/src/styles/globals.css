@@ -184,6 +184,91 @@ body {
   opacity: 0.55;
 }
 
+.sensor-history-panel {
+  position: absolute;
+  top: 16px;
+  right: 16px;
+  bottom: 16px;
+  z-index: 3;
+  width: min(440px, calc(100vw - 32px));
+  border: 1px solid var(--color-card-border);
+  border-radius: var(--radius-md);
+  background: color-mix(in srgb, var(--color-card) 94%, transparent);
+  box-shadow: var(--shadow-tooltip);
+  padding: 12px;
+  overflow: auto;
+}
+
+.sensor-history-panel__header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+
+.sensor-history-panel__title {
+  margin: 0;
+  font-size: 18px;
+  line-height: 1.2;
+}
+
+.sensor-history-panel__meta {
+  margin: 4px 0 0;
+  color: var(--color-text-secondary);
+  font-family: var(--font-mono);
+  font-size: 12px;
+}
+
+.sensor-history-panel__close {
+  appearance: none;
+  border: 1px solid var(--color-card-border);
+  border-radius: var(--radius-sm);
+  padding: 6px 10px;
+  color: var(--color-text-primary);
+  background: rgba(255, 255, 255, 0.05);
+  font-family: var(--font-body);
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.sensor-history-panel__close:hover {
+  border-color: var(--color-marker);
+  background: rgba(93, 196, 255, 0.2);
+}
+
+.sensor-history-panel__state {
+  margin: 8px 0;
+  color: var(--color-text-secondary);
+  font-size: 13px;
+}
+
+.sensor-history-panel__state--error {
+  color: #ff9e9e;
+}
+
+.sensor-history-panel__charts {
+  display: grid;
+  gap: 12px;
+}
+
+.sensor-history-panel__chart-card {
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: var(--radius-sm);
+  background: rgba(255, 255, 255, 0.02);
+  padding: 10px;
+}
+
+.sensor-history-panel__chart-title {
+  margin: 0 0 8px;
+  font-size: 13px;
+  color: var(--color-text-secondary);
+}
+
+.sensor-history-panel__chart-wrap {
+  height: 220px;
+}
+
 @media (max-width: 768px) {
   .metric-controls {
     top: 12px;
@@ -194,5 +279,18 @@ body {
 
   .sensor-tooltip {
     min-width: 200px;
+  }
+
+  .sensor-history-panel {
+    top: auto;
+    left: 12px;
+    right: 12px;
+    bottom: 12px;
+    width: auto;
+    max-height: 58vh;
+  }
+
+  .sensor-history-panel__chart-wrap {
+    height: 180px;
   }
 }

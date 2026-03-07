@@ -16,3 +16,15 @@ class SensorListItem(BaseModel):
 class SensorListResponse(BaseModel):
     sensors: list[SensorListItem]
     count: int
+
+
+class SensorHistoryReadingItem(BaseModel):
+    timestamp: str
+    aqi: int | None = None
+    temperature: float | None = None
+
+
+class SensorHistoryResponse(BaseModel):
+    sensor_id: int
+    readings: list[SensorHistoryReadingItem]
+    count: int

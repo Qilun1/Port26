@@ -3,10 +3,12 @@ import type {
   InterpolatedGrid,
   InterpolationMetric,
 } from '../model/interpolation'
-import type { WeatherReading } from '../model/weatherReading'
+import type { SensorHistorySeries, WeatherReading } from '../model/weatherReading'
 import {
   adaptBackendSensor,
+  adaptBackendSensorHistory,
   toWeatherReading,
+  type BackendSensorHistoryResponse,
   type BackendSensorListResponse,
 } from './sensorAdapter'
 
@@ -208,4 +210,31 @@ export async function getInterpolatedGrid(
   const payload = (await response.json()) as BackendInterpolationGridResponse
 
   return adaptInterpolationPayload(payload)
+}
+
+export async function getSensorHistoryById(
+  sensorId: number,
+  signal?: AbortSignal,
+): Promise<SensorHistorySeries> {
+  const response = await fetch(`${API_BASE_URL}/sensors/${sensorId}/readings`, {
+    signal,
+  })
+
+  if (!response.ok) {
+    let detail = `Failed to fetch history for sensor ${sensorId}: ${response.status}`
+
+    try {
+      const errorPayload = (await response.json()) as { detail?: string }
+      if (typeof errorPayload.detail === 'string' && errorPayload.detail.length > 0) {
+        detail = errorPayload.detail
+      }
+    } catch {
+      // Keep fallback message when backend did not return JSON.
+    }
+
+    throw new Error(detail)
+  }
+
+  const payload = (await response.json()) as BackendSensorHistoryResponse
+  return adaptBackendSensorHistory(payload)
 }
