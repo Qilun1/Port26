@@ -3,9 +3,8 @@ from fastapi import APIRouter, Depends, HTTPException, Query, status
 from config import get_settings
 from schemas import (
     InterpolationBoundingBox,
-    InterpolationGridPoint,
     InterpolationGridQuery,
-    InterpolationGridResponse,
+    InterpolationMaskedGridResponse,
     InterpolationMetric,
 )
 from services import GridInterpolationService, SensorPoint, SensorService
@@ -14,7 +13,7 @@ from services.grid.models import BoundingBox
 
 router = APIRouter(prefix="/interpolation", tags=["interpolation"])
 
-MAX_TRANSFER_GRID_POINTS = 20_000
+MAX_TRANSFER_GRID_POINTS = 100_000
 
 
 def get_sensor_service() -> SensorService:
@@ -43,12 +42,12 @@ def parse_interpolation_query(
     )
 
 
-@router.get("/grid", response_model=InterpolationGridResponse)
+@router.get("/grid", response_model=InterpolationMaskedGridResponse)
 def get_interpolated_grid(
     query: InterpolationGridQuery = Depends(parse_interpolation_query),
     sensor_service: SensorService = Depends(get_sensor_service),
     interpolation_service: GridInterpolationService = Depends(get_interpolation_service),
-) -> InterpolationGridResponse:
+) -> InterpolationMaskedGridResponse:
     try:
         sensors = sensor_service.list_sensors()
     except Exception as exc:
@@ -119,31 +118,24 @@ def get_interpolated_grid(
             ),
         )
 
-    interpolated_cells = interpolation_service.interpolate_over_bbox(
+    interpolated_grid = interpolation_service.interpolate_masked_matrix_over_bbox(
         sensors=metric_sensors,
         bounding_box=bounding_box,
         grid_size_meters=query.grid_size_meters,
         include_bounds=False,
     )
 
-    return InterpolationGridResponse(
+    return InterpolationMaskedGridResponse(
         metric=query.metric,
-        grid_size_meters=query.grid_size_meters,
-        count=len(interpolated_cells),
-        bounding_box=InterpolationBoundingBox(
-            min_latitude=bounding_box.min_latitude,
-            min_longitude=bounding_box.min_longitude,
-            max_latitude=bounding_box.max_latitude,
-            max_longitude=bounding_box.max_longitude,
+        rows=interpolated_grid.rows,
+        cols=interpolated_grid.cols,
+        bbox=InterpolationBoundingBox(
+            min_latitude=interpolated_grid.bounding_box.min_latitude,
+            min_longitude=interpolated_grid.bounding_box.min_longitude,
+            max_latitude=interpolated_grid.bounding_box.max_latitude,
+            max_longitude=interpolated_grid.bounding_box.max_longitude,
         ),
-        points=[
-            InterpolationGridPoint(
-                row=cell.row,
-                col=cell.col,
-                latitude=cell.latitude,
-                longitude=cell.longitude,
-                interpolated_value=cell.interpolated_value,
-            )
-            for cell in interpolated_cells
-        ],
+        cell_size_m=query.grid_size_meters,
+        values=interpolated_grid.values,
+        mask=interpolated_grid.mask,
     )

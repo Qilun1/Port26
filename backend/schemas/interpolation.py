@@ -76,3 +76,29 @@ class InterpolationGridResponse(BaseModel):
     count: int
     bounding_box: InterpolationBoundingBox
     points: list[InterpolationGridPoint]
+
+
+class InterpolationMaskedGridResponse(BaseModel):
+    metric: InterpolationMetric
+    rows: int = Field(ge=0)
+    cols: int = Field(ge=0)
+    bbox: InterpolationBoundingBox
+    cell_size_m: float = Field(gt=0)
+    values: list[float | None]
+    mask: list[int]
+
+    @model_validator(mode="after")
+    def validate_matrix(self) -> "InterpolationMaskedGridResponse":
+        expected_length = self.rows * self.cols
+        if len(self.values) != expected_length:
+            raise ValueError("values length must equal rows * cols.")
+        if len(self.mask) != expected_length:
+            raise ValueError("mask length must equal rows * cols.")
+
+        for index, cell_mask in enumerate(self.mask):
+            if cell_mask not in (0, 1):
+                raise ValueError("mask entries must be 0 or 1.")
+            if cell_mask == 0 and self.values[index] is not None:
+                raise ValueError("uncovered cells (mask=0) must have null value.")
+
+        return self

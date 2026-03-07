@@ -18,8 +18,9 @@ class SensorService:
         response = (
             self._client.table(self._table_name)
             .select(
-                "id,sensor_code,name,latitude,longitude,latest_temperature_c,latest_air_pressure_hpa,latest_aqi"
+                "id,sensor_code,name,latitude,longitude,latest_temperature_c,latest_air_pressure_hpa,latest_aqi,enabled"
             )
+            .eq("enabled", True)
             .order("id")
             .execute()
         )

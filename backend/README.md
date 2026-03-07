@@ -53,12 +53,12 @@ uv run uvicorn main:app --reload
 uv add <package>
 ```
 
-## Implemented Endpoint
+## Implemented Endpoints
 
-- `GET /sensors`: returns all sensors with coordinates and latest metrics.
+### `GET /sensors`
+Returns all sensors with coordinates and latest metrics.
 
-Example response shape:
-
+Example response:
 ```json
 {
 	"sensors": [
@@ -76,6 +76,40 @@ Example response shape:
 	"count": 1
 }
 ```
+
+### `GET /interpolation/grid`
+Returns IDW-interpolated grid values for a selected metric over the sensor area.
+
+Query parameters:
+- `metric` (required): `"temperature"` or `"aqi"`
+- `grid_size_meters` (optional): 50–200, default 100
+- `min_latitude`, `min_longitude`, `max_latitude`, `max_longitude` (optional): explicit bbox
+
+Example response:
+```json
+{
+	"metric": "temperature",
+	"grid_size_meters": 100.0,
+	"count": 156,
+	"bounding_box": {
+		"min_latitude": 60.05,
+		"min_longitude": 24.72,
+		"max_latitude": 60.29,
+		"max_longitude": 25.16
+	},
+	"points": [
+		{
+			"row": 0,
+			"col": 0,
+			"latitude": 60.28,
+			"longitude": 24.73,
+			"interpolated_value": 8.7
+		}
+	]
+}
+```
+
+Transfer limit: 20,000 points. Returns 422 if grid is too large.
 
 ## Endpoint Extension Pattern
 

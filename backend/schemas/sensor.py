@@ -10,6 +10,7 @@ class SensorListItem(BaseModel):
     latest_temperature_c: float | None = None
     latest_air_pressure_hpa: float | None = None
     latest_aqi: int | None = None
+    enabled: bool = True
 
 
 class SensorListResponse(BaseModel):

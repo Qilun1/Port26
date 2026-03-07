@@ -12,9 +12,13 @@ from .idw import (
     DEFAULT_IDW_POWER,
     DEFAULT_MAX_NEIGHBORS,
     DISTANCE_EPSILON_METERS,
+    LOCAL_COVERAGE_RADIUS_METERS,
+    LOCAL_IDW_POWER,
+    LOCAL_MAX_NEIGHBORS,
     interpolate_idw_point,
+    interpolate_local_idw_point,
 )
-from .models import InterpolatedGridCell, SensorPoint
+from .models import InterpolatedGridCell, InterpolatedGridMatrix, SensorPoint
 
 
 class GridInterpolationService:
@@ -74,6 +78,67 @@ class GridInterpolationService:
             max_neighbors=max_neighbors,
         )
         return bounding_box, interpolated_cells
+
+    def interpolate_masked_matrix_over_bbox(
+        self,
+        sensors: Sequence[SensorPoint],
+        bounding_box: BoundingBox,
+        grid_size_meters: float,
+        *,
+        include_bounds: bool = False,
+        coverage_radius_meters: float = LOCAL_COVERAGE_RADIUS_METERS,
+        idw_power: float = LOCAL_IDW_POWER,
+        distance_epsilon_meters: float = DISTANCE_EPSILON_METERS,
+        max_neighbors: int | None = LOCAL_MAX_NEIGHBORS,
+    ) -> InterpolatedGridMatrix:
+        grid_cells = build_grid_cells(
+            bounding_box=bounding_box,
+            grid_size_meters=grid_size_meters,
+            include_bounds=include_bounds,
+        )
+
+        if not grid_cells:
+            return InterpolatedGridMatrix(
+                rows=0,
+                cols=0,
+                bounding_box=bounding_box,
+                cell_size_meters=grid_size_meters,
+                values=[],
+                mask=[],
+            )
+
+        rows = max(cell.row for cell in grid_cells) + 1
+        cols = max(cell.col for cell in grid_cells) + 1
+
+        values: list[float | None] = []
+        mask: list[int] = []
+
+        for cell in grid_cells:
+            interpolated_value, covered = interpolate_local_idw_point(
+                latitude=cell.latitude,
+                longitude=cell.longitude,
+                sensors=sensors,
+                coverage_radius_meters=coverage_radius_meters,
+                power=idw_power,
+                distance_epsilon_meters=distance_epsilon_meters,
+                max_neighbors=max_neighbors,
+            )
+            if not covered:
+                values.append(None)
+                mask.append(0)
+                continue
+
+            values.append(interpolated_value)
+            mask.append(1)
+
+        return InterpolatedGridMatrix(
+            rows=rows,
+            cols=cols,
+            bounding_box=bounding_box,
+            cell_size_meters=grid_size_meters,
+            values=values,
+            mask=mask,
+        )
 
     def _interpolate_grid_cells(
         self,

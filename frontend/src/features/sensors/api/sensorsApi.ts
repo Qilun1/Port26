@@ -24,15 +24,134 @@ interface BackendInterpolationGridPoint {
 
 interface BackendInterpolationGridResponse {
   metric: InterpolationMetric
-  grid_size_meters: number
-  count: number
-  bounding_box: {
+  grid_size_meters?: number
+  cell_size_m?: number
+  count?: number
+  bounding_box?: {
     min_latitude: number
     min_longitude: number
     max_latitude: number
     max_longitude: number
   }
-  points: BackendInterpolationGridPoint[]
+  bbox?: {
+    min_latitude: number
+    min_longitude: number
+    max_latitude: number
+    max_longitude: number
+  }
+  points?: BackendInterpolationGridPoint[]
+  rows?: number
+  cols?: number
+  values?: Array<number | null>
+  mask?: number[]
+}
+
+function toPointFromMaskedMatrix(
+  row: number,
+  col: number,
+  rows: number,
+  cols: number,
+  value: number | null,
+  box: {
+    min_latitude: number
+    min_longitude: number
+    max_latitude: number
+    max_longitude: number
+  },
+): BackendInterpolationGridPoint {
+  const rowSpan = Math.max(1, rows)
+  const colSpan = Math.max(1, cols)
+  const cellLat = (box.max_latitude - box.min_latitude) / rowSpan
+  const cellLon = (box.max_longitude - box.min_longitude) / colSpan
+
+  return {
+    row,
+    col,
+    latitude: box.min_latitude + (row * cellLat) + (cellLat / 2),
+    longitude: box.min_longitude + (col * cellLon) + (cellLon / 2),
+    interpolated_value: value,
+  }
+}
+
+function adaptInterpolationPayload(
+  payload: BackendInterpolationGridResponse,
+): InterpolatedGrid {
+  const box = payload.bbox ?? payload.bounding_box
+  if (!box) {
+    throw new Error('Interpolation response is missing bbox/bounding_box.')
+  }
+
+  const gridSizeMeters = payload.cell_size_m ?? payload.grid_size_meters
+  if (typeof gridSizeMeters !== 'number' || Number.isNaN(gridSizeMeters)) {
+    throw new Error('Interpolation response is missing cell size information.')
+  }
+
+  if (Array.isArray(payload.points)) {
+    return {
+      metric: payload.metric,
+      gridSizeMeters,
+      count: payload.count ?? payload.points.length,
+      boundingBox: {
+        minLatitude: box.min_latitude,
+        minLongitude: box.min_longitude,
+        maxLatitude: box.max_latitude,
+        maxLongitude: box.max_longitude,
+      },
+      points: payload.points.map((point) => ({
+        row: point.row,
+        col: point.col,
+        latitude: point.latitude,
+        longitude: point.longitude,
+        interpolatedValue: point.interpolated_value,
+      })),
+    }
+  }
+
+  if (
+    typeof payload.rows !== 'number'
+    || typeof payload.cols !== 'number'
+    || !Array.isArray(payload.values)
+  ) {
+    throw new Error('Interpolation response has unsupported shape.')
+  }
+
+  const points: BackendInterpolationGridPoint[] = []
+  const expectedLength = payload.rows * payload.cols
+  const usableLength = Math.min(expectedLength, payload.values.length)
+
+  for (let index = 0; index < usableLength; index += 1) {
+    const row = Math.floor(index / payload.cols)
+    const col = index % payload.cols
+    points.push(
+      toPointFromMaskedMatrix(
+        row,
+        col,
+        payload.rows,
+        payload.cols,
+        payload.values[index],
+        box,
+      ),
+    )
+  }
+
+  return {
+    metric: payload.metric,
+    gridSizeMeters,
+    count: payload.mask?.reduce((sum, item) => sum + (item === 1 ? 1 : 0), 0) ?? points.length,
+    boundingBox: {
+      minLatitude: box.min_latitude,
+      minLongitude: box.min_longitude,
+      maxLatitude: box.max_latitude,
+      maxLongitude: box.max_longitude,
+    },
+    points: points.map((point) => ({
+      row: point.row,
+      col: point.col,
+      latitude: point.latitude,
+      longitude: point.longitude,
+      interpolatedValue: point.interpolated_value,
+    })),
+  }
 }
 
 async function fetchBackendSensors(): Promise<BackendSensorListResponse> {
@@ -88,22 +207,5 @@ export async function getInterpolatedGrid(
 
   const payload = (await response.json()) as BackendInterpolationGridResponse
 
-  return {
-    metric: payload.metric,
-    gridSizeMeters: payload.grid_size_meters,
-    count: payload.count,
-    boundingBox: {
-      minLatitude: payload.bounding_box.min_latitude,
-      minLongitude: payload.bounding_box.min_longitude,
-      maxLatitude: payload.bounding_box.max_latitude,
-      maxLongitude: payload.bounding_box.max_longitude,
-    },
-    points: payload.points.map((point) => ({
-      row: point.row,
-      col: point.col,
-      latitude: point.latitude,
-      longitude: point.longitude,
-      interpolatedValue: point.interpolated_value,
-    })),
-  }
+  return adaptInterpolationPayload(payload)
 }

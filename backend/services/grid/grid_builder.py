@@ -6,7 +6,7 @@ from .models import BoundingBox, GridCell
 
 MIN_GRID_SIZE_METERS = 50.0
 MAX_GRID_SIZE_METERS = 200.0
-DEFAULT_BBOX_MARGIN_METERS = 200.0
+DEFAULT_BBOX_MARGIN_METERS = 1_000.0
 
 
 class HasCoordinates(Protocol):

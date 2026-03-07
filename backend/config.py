@@ -7,7 +7,11 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 class Settings(BaseSettings):
 	"""Application settings loaded from .env and environment variables."""
 
-	model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8")
+	model_config = SettingsConfigDict(
+		env_file=".env",
+		env_file_encoding="utf-8",
+		extra="ignore",
+	)
 
 	app_name: str = "Port26 Weather API"
 	app_version: str = "0.1.0"
