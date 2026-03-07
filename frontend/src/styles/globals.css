@@ -1,0 +1,198 @@
+:root {
+  --color-background: #0c1117;
+  --color-card: #141b23;
+  --color-card-border: #2a3441;
+  --color-text-primary: #f3f7fc;
+  --color-text-secondary: #a9b7c8;
+  --color-marker: #5dc4ff;
+  --color-marker-hover: #7dd2ff;
+  --color-marker-border: #d9f3ff;
+
+  --shadow-marker: 0 0 16px rgba(93, 196, 255, 0.65);
+  --shadow-tooltip: 0 14px 34px rgba(0, 0, 0, 0.46);
+
+  --radius-sm: 8px;
+  --radius-md: 12px;
+  --radius-full: 999px;
+
+  --font-body: "Segoe UI", "Segoe UI Variable", "Inter", sans-serif;
+  --font-mono: "Cascadia Code", "Consolas", monospace;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#app {
+  width: 100%;
+  height: 100%;
+  margin: 0;
+  overflow: hidden;
+}
+
+body {
+  font-family: var(--font-body);
+  color: var(--color-text-primary);
+  background:
+    radial-gradient(circle at 16% 8%, rgba(92, 164, 226, 0.08), transparent 42%),
+    radial-gradient(circle at 88% 88%, rgba(33, 120, 178, 0.16), transparent 40%),
+    var(--color-background);
+}
+
+.map-screen {
+  position: fixed;
+  inset: 0;
+}
+
+.map-screen .maplibregl-map {
+  width: 100%;
+  height: 100%;
+}
+
+.metric-controls {
+  position: absolute;
+  top: 16px;
+  left: 16px;
+  z-index: 2;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 10px;
+  border: 1px solid var(--color-card-border);
+  border-radius: var(--radius-md);
+  background: color-mix(in srgb, var(--color-card) 90%, transparent);
+  box-shadow: var(--shadow-tooltip);
+  min-width: 230px;
+}
+
+.metric-controls__button {
+  appearance: none;
+  border: 1px solid var(--color-card-border);
+  border-radius: var(--radius-sm);
+  padding: 8px 10px;
+  text-align: left;
+  color: var(--color-text-primary);
+  background: rgba(255, 255, 255, 0.03);
+  font-family: var(--font-body);
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background-color 150ms ease, border-color 150ms ease, transform 120ms ease;
+}
+
+.metric-controls__button:hover {
+  transform: translateY(-1px);
+  border-color: var(--color-marker);
+  background: rgba(93, 196, 255, 0.14);
+}
+
+.metric-controls__button--active {
+  border-color: var(--color-marker);
+  background: rgba(93, 196, 255, 0.22);
+}
+
+.metric-controls__status {
+  min-height: 16px;
+  color: var(--color-text-secondary);
+  font-size: 12px;
+}
+
+.sensor-marker {
+  width: 14px;
+  height: 14px;
+  border: 1px solid var(--color-marker-border);
+  border-radius: var(--radius-full);
+  background: var(--color-marker);
+  box-shadow: var(--shadow-marker);
+  cursor: pointer;
+  transition: transform 120ms ease, background-color 120ms ease;
+}
+
+.sensor-marker:hover {
+  transform: scale(1.24);
+  background: var(--color-marker-hover);
+}
+
+.sensor-popup .maplibregl-popup-content {
+  margin: 0;
+  border: 1px solid var(--color-card-border);
+  border-radius: var(--radius-md);
+  background: var(--color-card);
+  color: var(--color-text-primary);
+  box-shadow: var(--shadow-tooltip);
+  padding: 10px 12px;
+}
+
+.sensor-popup .maplibregl-popup-tip {
+  border-top-color: var(--color-card-border);
+}
+
+.sensor-tooltip {
+  min-width: 220px;
+}
+
+.sensor-tooltip__title {
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.sensor-tooltip__sensor-id {
+  margin-top: 2px;
+  margin-bottom: 8px;
+  color: var(--color-text-secondary);
+  font-family: var(--font-mono);
+  font-size: 12px;
+}
+
+.sensor-tooltip__loading {
+  font-size: 12px;
+  color: var(--color-text-secondary);
+}
+
+.sensor-tooltip__stats {
+  margin: 0;
+}
+
+.sensor-tooltip__row {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 10px;
+  margin-top: 6px;
+  font-size: 12px;
+}
+
+.sensor-tooltip__row dt {
+  color: var(--color-text-secondary);
+}
+
+.sensor-tooltip__row dd {
+  margin: 0;
+  color: var(--color-text-primary);
+  font-weight: 500;
+}
+
+.sensor-tooltip__row--timestamp dd {
+  font-family: var(--font-mono);
+  font-size: 11px;
+}
+
+.maplibregl-ctrl-logo,
+.maplibregl-ctrl-attrib {
+  opacity: 0.55;
+}
+
+@media (max-width: 768px) {
+  .metric-controls {
+    top: 12px;
+    left: 12px;
+    right: 12px;
+    min-width: 0;
+  }
+
+  .sensor-tooltip {
+    min-width: 200px;
+  }
+}
