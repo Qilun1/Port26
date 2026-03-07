@@ -23,7 +23,14 @@ export function SensorMarker({
         onMouseEnter={() => onHoverStart(sensor)}
         onMouseLeave={onHoverEnd}
         onClick={() => onClick(sensor)}
-      />
+      >
+        <img
+          className="sensor-marker__icon"
+          src="/sensor_icon.png"
+          alt=""
+          aria-hidden="true"
+        />
+      </button>
     </Marker>
   )
 }

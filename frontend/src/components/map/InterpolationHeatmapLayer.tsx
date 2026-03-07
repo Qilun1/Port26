@@ -1,22 +1,41 @@
 import { useMemo } from 'react'
 import { Layer, Source } from 'react-map-gl/maplibre'
 import type { LayerProps } from 'react-map-gl/maplibre'
-import type {
-  InterpolatedGrid,
-  InterpolationMetric,
-} from '../../features/sensors/model/interpolation'
-import { createInterpolationSurface } from '../../lib/map/interpolationSurface'
+import type { InterpolationMetric } from '../../features/sensors/model/interpolation'
+import type { InterpolationTimeline } from '../../features/sensors/model/interpolationTimeline'
+import {
+  buildSparseSurfaceContext,
+  createSparseInterpolationSurface,
+} from '../../lib/map/interpolationSurface'
 
 const SOURCE_ID = 'interpolation-surface-source'
 const LAYER_ID = 'interpolation-surface-layer'
 
 interface Props {
-  grid: InterpolatedGrid
+  timeline: InterpolationTimeline
+  currentValues: ArrayLike<number>
   metric: InterpolationMetric
 }
 
-export function InterpolationHeatmapLayer({ grid, metric }: Props) {
-  const surface = useMemo(() => createInterpolationSurface(grid, metric), [grid, metric])
+export function InterpolationHeatmapLayer({ timeline, currentValues, metric }: Props) {
+  const staticContext = useMemo(
+    () =>
+      buildSparseSurfaceContext(
+        timeline.rows,
+        timeline.cols,
+        timeline.boundingBox,
+        timeline.activeIndices,
+        timeline.frames.map((frame) => frame.values),
+      ),
+    [timeline],
+  )
+
+  const surface = useMemo(() => {
+    if (!staticContext) {
+      return null
+    }
+    return createSparseInterpolationSurface(staticContext, metric, currentValues)
+  }, [staticContext, metric, currentValues])
 
   if (!surface) {
     return null

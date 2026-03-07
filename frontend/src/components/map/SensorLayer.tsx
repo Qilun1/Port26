@@ -1,27 +1,33 @@
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Popup } from 'react-map-gl/maplibre'
 import {
-  getInterpolatedGrid,
+  getInterpolationTimeline,
   getSensorHistoryById,
   listSensors,
 } from '../../features/sensors/api/sensorsApi'
 import { toWeatherReading } from '../../features/sensors/api/sensorAdapter'
-import type {
-  InterpolatedGrid,
-  InterpolationMetric,
-} from '../../features/sensors/model/interpolation'
+import type { InterpolationMetric } from '../../features/sensors/model/interpolation'
+import type { InterpolationTimeline } from '../../features/sensors/model/interpolationTimeline'
 import type { Sensor } from '../../features/sensors/model/sensor'
+import {
+  clampMinuteIndex,
+  getOrCreateMinuteFrameValues,
+  MINUTES_PER_DAY,
+  PLAYBACK_SIMULATED_MINUTES_PER_SECOND,
+} from '../../features/sensors/utils/timelinePlayback'
 import type { SensorHistoryPoint } from '../../features/sensors/model/weatherReading'
 import { InterpolationHeatmapLayer } from './InterpolationHeatmapLayer'
 import { SensorHistoryPanel } from './SensorHistoryPanel'
 import { SensorMarker } from './SensorMarker'
 import { SensorTooltip } from './SensorTooltip'
+import { TimelineControls } from './TimelineControls'
 
 const METRICS: InterpolationMetric[] = ['temperature', 'aqi']
 const METRIC_LABELS: Record<InterpolationMetric, string> = {
   temperature: 'Temperature',
   aqi: 'Air quality index',
 }
+const TIMELINE_DATE = import.meta.env.VITE_TIMELINE_DATE ?? '2026-03-07'
 
 export function SensorLayer() {
   const [sensors, setSensors] = useState<Sensor[]>([])
@@ -35,28 +41,34 @@ export function SensorLayer() {
   const [isLoading, setIsLoading] = useState(true)
   const [activeMetric, setActiveMetric] = useState<InterpolationMetric | null>(null)
   const [displayMetric, setDisplayMetric] = useState<InterpolationMetric | null>(null)
-  const [gridByMetric, setGridByMetric] = useState<Partial<Record<InterpolationMetric, InterpolatedGrid>>>(
-    {},
-  )
-  const [inFlightByMetric, setInFlightByMetric] = useState<
+  const [timelineByMetric, setTimelineByMetric] = useState<
+    Partial<Record<InterpolationMetric, InterpolationTimeline>>
+  >({})
+  const [timelineInFlightByMetric, setTimelineInFlightByMetric] = useState<
     Partial<Record<InterpolationMetric, boolean>>
   >({})
-  const [errorsByMetric, setErrorsByMetric] = useState<
+  const [timelineErrorsByMetric, setTimelineErrorsByMetric] = useState<
     Partial<Record<InterpolationMetric, string | null>>
   >({})
+  const [currentMinuteIndex, setCurrentMinuteIndex] = useState(0)
+  const [isPlaying, setIsPlaying] = useState(false)
 
   const activeMetricRef = useRef<InterpolationMetric | null>(null)
-  const cacheRef = useRef<Partial<Record<InterpolationMetric, InterpolatedGrid>>>({})
-  const controllersRef = useRef<Partial<Record<InterpolationMetric, AbortController>>>({})
+  const timelineCacheRef = useRef<Partial<Record<InterpolationMetric, InterpolationTimeline>>>({})
+  const timelineControllersRef = useRef<Partial<Record<InterpolationMetric, AbortController>>>({})
   const historyControllerRef = useRef<AbortController | null>(null)
+  const playbackMinuteCursorRef = useRef(0)
+  const minuteFrameCacheByMetricRef = useRef<
+    Partial<Record<InterpolationMetric, Map<number, ArrayLike<number>>>>
+  >({})
 
   useEffect(() => {
     activeMetricRef.current = activeMetric
   }, [activeMetric])
 
   useEffect(() => {
-    cacheRef.current = gridByMetric
-  }, [gridByMetric])
+    timelineCacheRef.current = timelineByMetric
+  }, [timelineByMetric])
 
   useEffect(() => {
     setIsLoading(true)
@@ -71,56 +83,60 @@ export function SensorLayer() {
 
   useEffect(() => {
     return () => {
-      for (const controller of Object.values(controllersRef.current)) {
+      for (const controller of Object.values(timelineControllersRef.current)) {
         controller?.abort()
       }
       historyControllerRef.current?.abort()
     }
   }, [])
 
-  const startMetricLoad = useCallback((metric: InterpolationMetric) => {
-    if (controllersRef.current[metric]) {
+  const startTimelineLoad = useCallback((metric: InterpolationMetric) => {
+    if (timelineControllersRef.current[metric]) {
       return
     }
 
     const controller = new AbortController()
-    controllersRef.current[metric] = controller
+    timelineControllersRef.current[metric] = controller
 
-    setInFlightByMetric((current) => ({
+    setTimelineInFlightByMetric((current) => ({
       ...current,
       [metric]: true,
     }))
 
-    void getInterpolatedGrid(metric, undefined, controller.signal)
-      .then((grid) => {
-        setGridByMetric((current) => ({
+    void getInterpolationTimeline(metric, TIMELINE_DATE, undefined, controller.signal)
+      .then((timeline) => {
+        setTimelineByMetric((current) => ({
           ...current,
-          [metric]: grid,
+          [metric]: timeline,
         }))
 
-        setErrorsByMetric((current) => ({
+        setTimelineErrorsByMetric((current) => ({
           ...current,
           [metric]: null,
         }))
 
         if (activeMetricRef.current === metric) {
           setDisplayMetric(metric)
+          setCurrentMinuteIndex(0)
+          playbackMinuteCursorRef.current = 0
         }
+
+        minuteFrameCacheByMetricRef.current[metric] = new Map<number, ArrayLike<number>>()
       })
       .catch((error: unknown) => {
         if (controller.signal.aborted) {
           return
         }
 
-        const message = error instanceof Error ? error.message : 'Failed to load heatmap data.'
-        setErrorsByMetric((current) => ({
+        const message = error instanceof Error ? error.message : 'Failed to load timeline data.'
+        setTimelineErrorsByMetric((current) => ({
           ...current,
           [metric]: message,
         }))
       })
       .finally(() => {
-        delete controllersRef.current[metric]
-        setInFlightByMetric((current) => ({
+        delete timelineControllersRef.current[metric]
+        setTimelineInFlightByMetric((current) => ({
           ...current,
           [metric]: false,
         }))
@@ -130,19 +146,22 @@ export function SensorLayer() {
   const handleMetricSelect = useCallback(
     (metric: InterpolationMetric) => {
       setActiveMetric(metric)
-      setErrorsByMetric((current) => ({
+      setTimelineErrorsByMetric((current) => ({
         ...current,
         [metric]: null,
       }))
 
-      if (cacheRef.current[metric]) {
+      const cachedTimeline = timelineCacheRef.current[metric]
+      if (cachedTimeline) {
         setDisplayMetric(metric)
+        setCurrentMinuteIndex(0)
+        playbackMinuteCursorRef.current = 0
         return
       }
 
-      startMetricLoad(metric)
+      startTimelineLoad(metric)
     },
-    [startMetricLoad],
+    [startTimelineLoad],
   )
 
   const handleHoverStart = useCallback((sensor: Sensor) => {
@@ -200,17 +219,107 @@ export function SensorLayer() {
     setHistoryError(null)
   }, [])
 
+  const renderedMetric = displayMetric && timelineByMetric[displayMetric] ? displayMetric : null
+  const activeTimeline = renderedMetric ? (timelineByMetric[renderedMetric] ?? null) : null
+  const sourceFrameCount = activeTimeline?.frames.length ?? 0
+  const minuteCount = sourceFrameCount > 0 ? MINUTES_PER_DAY : 0
+
+  const currentFrameValues = useMemo<ArrayLike<number>>(() => {
+    if (!activeTimeline || !renderedMetric) {
+      return []
+    }
+
+    let minuteCache = minuteFrameCacheByMetricRef.current[renderedMetric]
+    if (!minuteCache) {
+      minuteCache = new Map<number, ArrayLike<number>>()
+      minuteFrameCacheByMetricRef.current[renderedMetric] = minuteCache
+    }
+
+    return getOrCreateMinuteFrameValues(activeTimeline, currentMinuteIndex, minuteCache)
+  }, [activeTimeline, renderedMetric, currentMinuteIndex])
+
+  useEffect(() => {
+    if (!isPlaying || minuteCount === 0) {
+      return
+    }
+
+    let animationFrameId = 0
+    let previousTick: number | null = null
+
+    const tick = (timestampMs: number) => {
+      if (previousTick === null) {
+        previousTick = timestampMs
+        animationFrameId = window.requestAnimationFrame(tick)
+        return
+      }
+
+      const elapsedSeconds = (timestampMs - previousTick) / 1000
+      previousTick = timestampMs
+
+      playbackMinuteCursorRef.current =
+        (playbackMinuteCursorRef.current
+          + (elapsedSeconds * PLAYBACK_SIMULATED_MINUTES_PER_SECOND))
+        % MINUTES_PER_DAY
+
+      const nextMinuteIndex = Math.floor(playbackMinuteCursorRef.current)
+      setCurrentMinuteIndex((current) => (current === nextMinuteIndex ? current : nextMinuteIndex))
+
+      animationFrameId = window.requestAnimationFrame(tick)
+    }
+
+    animationFrameId = window.requestAnimationFrame(tick)
+
+    return () => {
+      window.cancelAnimationFrame(animationFrameId)
+    }
+  }, [isPlaying, minuteCount])
+
+  useEffect(() => {
+    if (minuteCount === 0) {
+      setCurrentMinuteIndex(0)
+      playbackMinuteCursorRef.current = 0
+      setIsPlaying(false)
+      return
+    }
+
+    setCurrentMinuteIndex((current) => {
+      const clamped = clampMinuteIndex(current)
+      playbackMinuteCursorRef.current = clamped
+      return clamped
+    })
+  }, [minuteCount])
+
+  useEffect(() => {
+    playbackMinuteCursorRef.current = currentMinuteIndex
+  }, [currentMinuteIndex])
+
+  const handleSeek = useCallback((nextMinuteIndex: number) => {
+    const clamped = clampMinuteIndex(nextMinuteIndex)
+    playbackMinuteCursorRef.current = clamped
+    setCurrentMinuteIndex(clamped)
+  }, [])
+
+  const handleTogglePlay = useCallback(() => {
+    if (minuteCount === 0) {
+      return
+    }
+
+    setIsPlaying((current) => !current)
+  }, [minuteCount])
+
   const reading = hoveredSensor ? toWeatherReading(hoveredSensor) : null
-  const isGridLoading = activeMetric ? Boolean(inFlightByMetric[activeMetric]) : false
-  const gridError = activeMetric ? (errorsByMetric[activeMetric] ?? null) : null
-  const renderedMetric = displayMetric && gridByMetric[displayMetric] ? displayMetric : null
-  const activeGrid = renderedMetric ? (gridByMetric[renderedMetric] ?? null) : null
+  const isTimelineLoading = activeMetric ? Boolean(timelineInFlightByMetric[activeMetric]) : false
+  const timelineError = activeMetric ? (timelineErrorsByMetric[activeMetric] ?? null) : null
   const selectedHistory = selectedSensor ? (historyPointsBySensor[selectedSensor.id] ?? []) : []
 
   return (
     <>
-      {renderedMetric && activeGrid && (
-        <InterpolationHeatmapLayer grid={activeGrid} metric={renderedMetric} />
+      {renderedMetric && activeTimeline && (
+        <InterpolationHeatmapLayer
+          timeline={activeTimeline}
+          currentValues={currentFrameValues}
+          metric={renderedMetric}
+        />
       )}
 
       <div className="metric-controls" role="group" aria-label="Interpolation metric selector">
@@ -226,17 +335,29 @@ export function SensorLayer() {
         ))}
 
         <div className="metric-controls__status" aria-live="polite">
-          {isGridLoading && 'Loading interpolation grid...'}
-          {!isGridLoading && gridError}
-          {!isGridLoading && !gridError && !activeMetric && 'Choose a metric to load heatmap data.'}
-          {!isGridLoading && !gridError && activeMetric && renderedMetric && activeGrid
-            ? `${activeGrid.count} points (${METRIC_LABELS[renderedMetric]})`
+          {isTimelineLoading && 'Loading timeline...'}
+          {!isTimelineLoading && timelineError}
+          {!isTimelineLoading && !timelineError && !activeMetric && 'Choose a metric to load timeline.'}
+          {!isTimelineLoading && !timelineError && activeTimeline
+            ? `${activeTimeline.frames.length} frames (${METRIC_LABELS[activeTimeline.metric]})`
             : null}
-          {isGridLoading && renderedMetric && renderedMetric !== activeMetric
+          {isTimelineLoading && renderedMetric && renderedMetric !== activeMetric
             ? `Showing cached ${METRIC_LABELS[renderedMetric]} while loading ${METRIC_LABELS[activeMetric ?? renderedMetric]}...`
             : null}
         </div>
       </div>
+
+      {activeTimeline && (
+        <TimelineControls
+          minuteCount={minuteCount}
+          currentMinuteIndex={currentMinuteIndex}
+          isPlaying={isPlaying}
+          isLoading={isTimelineLoading}
+          error={timelineError}
+          onSeek={handleSeek}
+          onTogglePlay={handleTogglePlay}
+        />
+      )}
 
       {sensors.map((sensor) => (
         <SensorMarker

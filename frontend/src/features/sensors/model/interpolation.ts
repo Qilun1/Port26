@@ -7,18 +7,12 @@ export interface InterpolationBoundingBox {
   maxLongitude: number
 }
 
-export interface InterpolatedGridPoint {
-  row: number
-  col: number
-  latitude: number
-  longitude: number
-  interpolatedValue: number | null
-}
-
 export interface InterpolatedGrid {
   metric: InterpolationMetric
   gridSizeMeters: number
-  count: number
+  rows: number
+  cols: number
   boundingBox: InterpolationBoundingBox
-  points: InterpolatedGridPoint[]
+  values: Array<number | null>
+  mask: number[]
 }

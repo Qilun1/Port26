@@ -4,8 +4,11 @@ from .interpolation import (
 	GridInterpolationService,
 	InterpolatedGridCell,
 	InterpolatedGridMatrix,
+	InterpolationTimelineLoaderService,
+	InterpolationTimelineNotFoundError,
 	SensorPoint,
 	build_default_interpolation_service,
+	build_default_timeline_loader_service,
 )
 
 __all__ = [
@@ -17,4 +20,7 @@ __all__ = [
 	"InterpolatedGridMatrix",
 	"GridInterpolationService",
 	"build_default_interpolation_service",
+	"InterpolationTimelineLoaderService",
+	"InterpolationTimelineNotFoundError",
+	"build_default_timeline_loader_service",
 ]

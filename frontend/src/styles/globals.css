@@ -99,20 +99,91 @@ body {
   font-size: 12px;
 }
 
-.sensor-marker {
-  width: 14px;
-  height: 14px;
-  border: 1px solid var(--color-marker-border);
-  border-radius: var(--radius-full);
-  background: var(--color-marker);
-  box-shadow: var(--shadow-marker);
+.timeline-controls {
+  position: absolute;
+  left: 50%;
+  bottom: 16px;
+  z-index: 3;
+  transform: translateX(-50%);
+  width: min(760px, calc(100vw - 32px));
+  padding: 10px 12px;
+  border: 1px solid var(--color-card-border);
+  border-radius: var(--radius-md);
+  background: color-mix(in srgb, var(--color-card) 92%, transparent);
+  box-shadow: var(--shadow-tooltip);
+}
+
+.timeline-controls__header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+}
+
+.timeline-controls__play {
+  appearance: none;
+  border: 1px solid var(--color-card-border);
+  border-radius: var(--radius-sm);
+  padding: 6px 11px;
+  color: var(--color-text-primary);
+  background: rgba(255, 255, 255, 0.04);
+  font-family: var(--font-body);
+  font-size: 12px;
+  font-weight: 600;
   cursor: pointer;
-  transition: transform 120ms ease, background-color 120ms ease;
+}
+
+.timeline-controls__play:hover:enabled {
+  border-color: var(--color-marker);
+  background: rgba(93, 196, 255, 0.2);
+}
+
+.timeline-controls__play:disabled {
+  opacity: 0.58;
+  cursor: not-allowed;
+}
+
+.timeline-controls__label {
+  color: var(--color-text-primary);
+  font-family: var(--font-mono);
+  font-size: 13px;
+}
+
+.timeline-controls__slider {
+  width: 100%;
+  margin-top: 8px;
+}
+
+.timeline-controls__meta {
+  min-height: 16px;
+  margin-top: 6px;
+  color: var(--color-text-secondary);
+  font-size: 12px;
+}
+
+.sensor-marker {
+  width: 30.6px;
+  height: 30.6px;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+  cursor: pointer;
+  transition: transform 120ms ease;
 }
 
 .sensor-marker:hover {
-  transform: scale(1.24);
-  background: var(--color-marker-hover);
+  transform: scale(1.08);
+}
+
+.sensor-marker__icon {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  opacity: 0.9;
+  filter: drop-shadow(0 0 10px rgba(17, 24, 39, 0.5));
 }
 
 .sensor-popup .maplibregl-popup-content {
@@ -279,6 +350,14 @@ body {
 
   .sensor-tooltip {
     min-width: 200px;
+  }
+
+  .timeline-controls {
+    left: 12px;
+    right: 12px;
+    bottom: 12px;
+    transform: none;
+    width: auto;
   }
 
   .sensor-history-panel {

@@ -1,13 +1,22 @@
+from datetime import date
+
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 
 from config import get_settings
 from schemas import (
     InterpolationBoundingBox,
     InterpolationGridQuery,
+    InterpolationTimelineResponse,
     InterpolationMaskedGridResponse,
     InterpolationMetric,
 )
-from services import GridInterpolationService, SensorPoint, SensorService
+from services import (
+    GridInterpolationService,
+    InterpolationTimelineLoaderService,
+    InterpolationTimelineNotFoundError,
+    SensorPoint,
+    SensorService,
+)
 from services.grid import build_grid_cells, derive_bbox_from_sensors
 from services.grid.models import BoundingBox
 
@@ -22,6 +31,10 @@ def get_sensor_service() -> SensorService:
 
 def get_interpolation_service() -> GridInterpolationService:
     return GridInterpolationService(get_settings())
+
+
+def get_timeline_loader_service() -> InterpolationTimelineLoaderService:
+    return InterpolationTimelineLoaderService(get_settings())
 
 
 def parse_interpolation_query(
@@ -139,3 +152,31 @@ def get_interpolated_grid(
         values=interpolated_grid.values,
         mask=interpolated_grid.mask,
     )
+
+
+@router.get("/timeline", response_model=InterpolationTimelineResponse)
+def get_interpolated_timeline(
+    metric: InterpolationMetric,
+    date_value: date = Query(alias="date"),
+    grid_size_meters: float = Query(100.0, ge=50.0, le=200.0),
+    timeline_loader: InterpolationTimelineLoaderService = Depends(get_timeline_loader_service),
+) -> InterpolationTimelineResponse:
+    try:
+        return timeline_loader.load_timeline(
+            metric=metric,
+            timeline_date=date_value,
+            grid_size_meters=grid_size_meters,
+        )
+    except InterpolationTimelineNotFoundError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=(
+                "Precomputed interpolation timeline does not exist for the requested "
+                "metric/date/grid size. Generate the artifact first."
+            ),
+        ) from exc
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail=str(exc),
+        ) from exc

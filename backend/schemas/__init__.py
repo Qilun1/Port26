@@ -1,5 +1,7 @@
 from .interpolation import (
 	InterpolationBoundingBox,
+	InterpolationTimelineFrame,
+	InterpolationTimelineResponse,
 	InterpolationMaskedGridResponse,
 	InterpolationGridPoint,
 	InterpolationGridQuery,
@@ -21,6 +23,8 @@ __all__ = [
 	"InterpolationMetric",
 	"InterpolationGridQuery",
 	"InterpolationBoundingBox",
+	"InterpolationTimelineFrame",
+	"InterpolationTimelineResponse",
 	"InterpolationMaskedGridResponse",
 	"InterpolationGridPoint",
 	"InterpolationGridResponse",

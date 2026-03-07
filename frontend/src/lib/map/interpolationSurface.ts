@@ -1,19 +1,11 @@
 import type {
-  InterpolatedGrid,
+  InterpolationBoundingBox,
   InterpolationMetric,
 } from '../../features/sensors/model/interpolation'
-
-const CELL_PIXEL_RESOLUTION = 12
 
 type ColorStop = {
   t: number
   rgb: [number, number, number]
-}
-
-type GridMatrix = {
-  values: Array<Array<number | null>>
-  rowCount: number
-  colCount: number
 }
 
 export type InterpolationSurface = {
@@ -21,8 +13,35 @@ export type InterpolationSurface = {
   coordinates: [[number, number], [number, number], [number, number], [number, number]]
 }
 
+export type SparseSurfaceContext = {
+  width: number
+  height: number
+  pixelOffsets: number[]
+  minValue: number
+  maxValue: number
+  coordinates: [[number, number], [number, number], [number, number], [number, number]]
+}
+
 function clamp(value: number, minValue: number, maxValue: number): number {
   return Math.max(minValue, Math.min(maxValue, value))
+}
+
+function resolveCoordinates(
+  box: InterpolationBoundingBox,
+): [[number, number], [number, number], [number, number], [number, number]] {
+  return [
+    [box.minLongitude, box.maxLatitude],
+    [box.maxLongitude, box.maxLatitude],
+    [box.maxLongitude, box.minLatitude],
+    [box.minLongitude, box.minLatitude],
+  ]
+}
+
+function toPixelOffset(index: number, cols: number, rows: number): number {
+  const row = Math.floor(index / cols)
+  const col = index % cols
+  const y = (rows - 1) - row
+  return ((y * cols) + col) * 4
 }
 
 function getColorStops(metric: InterpolationMetric): ColorStop[] {
@@ -39,98 +58,6 @@ function getColorStops(metric: InterpolationMetric): ColorStop[] {
     { t: 0.5, rgb: [132, 227, 176] },
     { t: 1, rgb: [255, 111, 97] },
   ]
-}
-
-function toGridMatrix(grid: InterpolatedGrid): GridMatrix | null {
-  if (grid.points.length === 0) {
-    return null
-  }
-
-  const rowCount = Math.max(...grid.points.map((point) => point.row)) + 1
-  const colCount = Math.max(...grid.points.map((point) => point.col)) + 1
-
-  if (rowCount <= 0 || colCount <= 0) {
-    return null
-  }
-
-  const values: Array<Array<number | null>> = Array.from({ length: rowCount }, () =>
-    Array.from({ length: colCount }, () => null),
-  )
-
-  for (const point of grid.points) {
-    values[point.row][point.col] = point.interpolatedValue
-  }
-
-  return {
-    values,
-    rowCount,
-    colCount,
-  }
-}
-
-function bilinearFromCorners(
-  v00: number | null,
-  v10: number | null,
-  v01: number | null,
-  v11: number | null,
-  tx: number,
-  ty: number,
-): number | null {
-  const corners: Array<[number | null, number]> = [
-    [v00, (1 - tx) * (1 - ty)],
-    [v10, tx * (1 - ty)],
-    [v01, (1 - tx) * ty],
-    [v11, tx * ty],
-  ]
-
-  let weightedSum = 0
-  let weightTotal = 0
-
-  for (const [value, weight] of corners) {
-    if (value === null || weight <= 0) {
-      continue
-    }
-
-    weightedSum += value * weight
-    weightTotal += weight
-  }
-
-  if (weightTotal <= 0) {
-    return null
-  }
-
-  return weightedSum / weightTotal
-}
-
-function sampleBilinear(matrix: GridMatrix, gx: number, gy: number): number | null {
-  const x0 = clamp(Math.floor(gx), 0, matrix.colCount - 1)
-  const y0 = clamp(Math.floor(gy), 0, matrix.rowCount - 1)
-  const x1 = clamp(x0 + 1, 0, matrix.colCount - 1)
-  const y1 = clamp(y0 + 1, 0, matrix.rowCount - 1)
-
-  const tx = clamp(gx - x0, 0, 1)
-  const ty = clamp(gy - y0, 0, 1)
-
-  return bilinearFromCorners(
-    matrix.values[y0][x0],
-    matrix.values[y0][x1],
-    matrix.values[y1][x0],
-    matrix.values[y1][x1],
-    tx,
-    ty,
-  )
-}
-
-function getValueRange(matrix: GridMatrix): { minValue: number; maxValue: number } | null {
-  const values = matrix.values.flat().filter((value): value is number => value !== null)
-  if (values.length === 0) {
-    return null
-  }
-
-  return {
-    minValue: Math.min(...values),
-    maxValue: Math.max(...values),
-  }
 }
 
 function valueToColor(
@@ -166,73 +93,102 @@ function valueToColor(
   ]
 }
 
-export function createInterpolationSurface(
-  grid: InterpolatedGrid,
+export function buildSparseSurfaceContext(
+  rows: number,
+  cols: number,
+  boundingBox: InterpolationBoundingBox,
+  activeIndices: number[],
+  timelineFrameValues: number[][],
+): SparseSurfaceContext | null {
+  if (rows <= 0 || cols <= 0 || activeIndices.length === 0) {
+    return null
+  }
+
+  const gridLength = rows * cols
+  const pixelOffsets: number[] = []
+  let previousIndex = -1
+
+  for (const index of activeIndices) {
+    if (index <= previousIndex || index < 0 || index >= gridLength) {
+      return null
+    }
+
+    pixelOffsets.push(toPixelOffset(index, cols, rows))
+    previousIndex = index
+  }
+
+  let minValue = Number.POSITIVE_INFINITY
+  let maxValue = Number.NEGATIVE_INFINITY
+
+  for (const frameValues of timelineFrameValues) {
+    if (frameValues.length !== activeIndices.length) {
+      return null
+    }
+
+    for (const value of frameValues) {
+      if (!Number.isFinite(value)) {
+        continue
+      }
+      minValue = Math.min(minValue, value)
+      maxValue = Math.max(maxValue, value)
+    }
+  }
+
+  if (!Number.isFinite(minValue) || !Number.isFinite(maxValue)) {
+    return null
+  }
+
+  return {
+    width: cols,
+    height: rows,
+    pixelOffsets,
+    minValue,
+    maxValue,
+    coordinates: resolveCoordinates(boundingBox),
+  }
+}
+
+export function createSparseInterpolationSurface(
+  contextData: SparseSurfaceContext,
   metric: InterpolationMetric,
+  frameValues: ArrayLike<number>,
 ): InterpolationSurface | null {
   if (typeof document === 'undefined') {
     return null
   }
-
-  const matrix = toGridMatrix(grid)
-  if (!matrix) {
+  if (frameValues.length !== contextData.pixelOffsets.length) {
     return null
   }
-
-  const range = getValueRange(matrix)
-  if (!range) {
-    return null
-  }
-
-  const width = Math.max(2, ((matrix.colCount - 1) * CELL_PIXEL_RESOLUTION) + 1)
-  const height = Math.max(2, ((matrix.rowCount - 1) * CELL_PIXEL_RESOLUTION) + 1)
 
   const canvas = document.createElement('canvas')
-  canvas.width = width
-  canvas.height = height
+  canvas.width = contextData.width
+  canvas.height = contextData.height
 
   const context = canvas.getContext('2d')
   if (!context) {
     return null
   }
 
-  const image = context.createImageData(width, height)
+  const image = context.createImageData(contextData.width, contextData.height)
   const stops = getColorStops(metric)
 
-  for (let y = 0; y < height; y += 1) {
-    const gy = ((height - 1 - y) / Math.max(1, height - 1)) * (matrix.rowCount - 1)
-
-    for (let x = 0; x < width; x += 1) {
-      const gx = (x / Math.max(1, width - 1)) * (matrix.colCount - 1)
-      const value = sampleBilinear(matrix, gx, gy)
-
-      const index = (y * width + x) * 4
-      if (value === null) {
-        image.data[index] = 0
-        image.data[index + 1] = 0
-        image.data[index + 2] = 0
-        image.data[index + 3] = 0
-        continue
-      }
-
-      const [r, g, b, a] = valueToColor(value, range.minValue, range.maxValue, stops)
-      image.data[index] = r
-      image.data[index + 1] = g
-      image.data[index + 2] = b
-      image.data[index + 3] = a
-    }
+  for (let i = 0; i < frameValues.length; i += 1) {
+    const offset = contextData.pixelOffsets[i]
+    const [r, g, b, a] = valueToColor(
+      frameValues[i],
+      contextData.minValue,
+      contextData.maxValue,
+      stops,
+    )
+    image.data[offset] = r
+    image.data[offset + 1] = g
+    image.data[offset + 2] = b
+    image.data[offset + 3] = a
   }
 
   context.putImageData(image, 0, 0)
-
-  const box = grid.boundingBox
   return {
     url: canvas.toDataURL('image/png'),
-    coordinates: [
-      [box.minLongitude, box.maxLatitude],
-      [box.maxLongitude, box.maxLatitude],
-      [box.maxLongitude, box.minLatitude],
-      [box.minLongitude, box.minLatitude],
-    ],
+    coordinates: contextData.coordinates,
   }
 }

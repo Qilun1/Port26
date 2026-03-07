@@ -3,6 +3,7 @@ import type {
   InterpolatedGrid,
   InterpolationMetric,
 } from '../model/interpolation'
+import type { InterpolationTimeline } from '../model/interpolationTimeline'
 import type { SensorHistorySeries, WeatherReading } from '../model/weatherReading'
 import {
   adaptBackendSensor,
@@ -22,6 +23,28 @@ interface BackendInterpolationGridPoint {
   latitude: number
   longitude: number
   interpolated_value: number | null
+}
+
+interface BackendInterpolationTimelineFrame {
+  timestamp: string
+  values: number[]
+}
+
+interface BackendInterpolationTimelineResponse {
+  metric: InterpolationMetric
+  date: string
+  grid_size_meters: number
+  rows: number
+  cols: number
+  bounding_box: {
+    min_latitude: number
+    min_longitude: number
+    max_latitude: number
+    max_longitude: number
+  }
+  active_indices: number[]
+  timestamps: string[]
+  frames: BackendInterpolationTimelineFrame[]
 }
 
 interface BackendInterpolationGridResponse {
@@ -48,33 +71,6 @@ interface BackendInterpolationGridResponse {
   mask?: number[]
 }
 
-function toPointFromMaskedMatrix(
-  row: number,
-  col: number,
-  rows: number,
-  cols: number,
-  value: number | null,
-  box: {
-    min_latitude: number
-    min_longitude: number
-    max_latitude: number
-    max_longitude: number
-  },
-): BackendInterpolationGridPoint {
-  const rowSpan = Math.max(1, rows)
-  const colSpan = Math.max(1, cols)
-  const cellLat = (box.max_latitude - box.min_latitude) / rowSpan
-  const cellLon = (box.max_longitude - box.min_longitude) / colSpan
-
-  return {
-    row,
-    col,
-    latitude: box.min_latitude + (row * cellLat) + (cellLat / 2),
-    longitude: box.min_longitude + (col * cellLon) + (cellLon / 2),
-    interpolated_value: value,
-  }
-}
-
 function adaptInterpolationPayload(
   payload: BackendInterpolationGridResponse,
 ): InterpolatedGrid {
@@ -89,23 +85,29 @@ function adaptInterpolationPayload(
   }
 
   if (Array.isArray(payload.points)) {
+    const rows = Math.max(...payload.points.map((point) => point.row)) + 1
+    const cols = Math.max(...payload.points.map((point) => point.col)) + 1
+    const expectedLength = rows * cols
+    const values: Array<number | null> = Array.from({ length: expectedLength }, () => null)
+
+    for (const point of payload.points) {
+      const index = (point.row * cols) + point.col
+      values[index] = point.interpolated_value
+    }
+
     return {
       metric: payload.metric,
       gridSizeMeters,
-      count: payload.count ?? payload.points.length,
+      rows,
+      cols,
       boundingBox: {
         minLatitude: box.min_latitude,
         minLongitude: box.min_longitude,
         maxLatitude: box.max_latitude,
         maxLongitude: box.max_longitude,
       },
-      points: payload.points.map((point) => ({
-        row: point.row,
-        col: point.col,
-        latitude: point.latitude,
-        longitude: point.longitude,
-        interpolatedValue: point.interpolated_value,
-      })),
+      values,
+      mask: values.map((value) => (value === null ? 0 : 1)),
     }
   }
 
@@ -117,42 +119,81 @@ function adaptInterpolationPayload(
     throw new Error('Interpolation response has unsupported shape.')
   }
 
-  const points: BackendInterpolationGridPoint[] = []
   const expectedLength = payload.rows * payload.cols
-  const usableLength = Math.min(expectedLength, payload.values.length)
-
-  for (let index = 0; index < usableLength; index += 1) {
-    const row = Math.floor(index / payload.cols)
-    const col = index % payload.cols
-    points.push(
-      toPointFromMaskedMatrix(
-        row,
-        col,
-        payload.rows,
-        payload.cols,
-        payload.values[index],
-        box,
-      ),
-    )
+  const values = payload.values.slice(0, expectedLength)
+  while (values.length < expectedLength) {
+    values.push(null)
   }
+
+  const mask = Array.isArray(payload.mask)
+    ? payload.mask.slice(0, expectedLength)
+    : values.map((value) => (value === null ? 0 : 1))
 
   return {
     metric: payload.metric,
     gridSizeMeters,
-    count: payload.mask?.reduce((sum, item) => sum + (item === 1 ? 1 : 0), 0) ?? points.length,
+    rows: payload.rows,
+    cols: payload.cols,
     boundingBox: {
       minLatitude: box.min_latitude,
       minLongitude: box.min_longitude,
       maxLatitude: box.max_latitude,
       maxLongitude: box.max_longitude,
     },
-    points: points.map((point) => ({
-      row: point.row,
-      col: point.col,
-      latitude: point.latitude,
-      longitude: point.longitude,
-      interpolatedValue: point.interpolated_value,
-    })),
+    values,
+    mask,
+  }
+}
+
+function adaptInterpolationTimelinePayload(
+  payload: BackendInterpolationTimelineResponse,
+): InterpolationTimeline {
+  if (!Array.isArray(payload.active_indices) || payload.active_indices.length === 0) {
+    throw new Error('Interpolation timeline is missing active_indices.')
+  }
+
+  if (!Array.isArray(payload.frames) || payload.frames.length !== payload.timestamps.length) {
+    throw new Error('Interpolation timeline has mismatched frame/timestamp arrays.')
+  }
+
+  const activeLength = payload.active_indices.length
+
+  let previousIndex = -1
+  for (const index of payload.active_indices) {
+    if (!Number.isInteger(index) || index <= previousIndex || index < 0 || index >= (payload.rows * payload.cols)) {
+      throw new Error('Interpolation timeline active_indices are invalid.')
+    }
+    previousIndex = index
+  }
+
+  return {
+    metric: payload.metric,
+    date: payload.date,
+    gridSizeMeters: payload.grid_size_meters,
+    rows: payload.rows,
+    cols: payload.cols,
+    boundingBox: {
+      minLatitude: payload.bounding_box.min_latitude,
+      minLongitude: payload.bounding_box.min_longitude,
+      maxLatitude: payload.bounding_box.max_latitude,
+      maxLongitude: payload.bounding_box.max_longitude,
+    },
+    activeIndices: payload.active_indices,
+    timestamps: payload.timestamps,
+    frames: payload.frames.map((frame, index) => {
+      if (!Array.isArray(frame.values) || frame.values.length !== activeLength) {
+        throw new Error('Interpolation timeline frame values do not match active_indices length.')
+      }
+
+      if (frame.timestamp !== payload.timestamps[index]) {
+        throw new Error('Interpolation timeline timestamps are out of sync.')
+      }
+
+      return {
+        timestamp: frame.timestamp,
+        values: frame.values,
+      }
+    }),
   }
 }
 
@@ -210,6 +251,41 @@ export async function getInterpolatedGrid(
   const payload = (await response.json()) as BackendInterpolationGridResponse
 
   return adaptInterpolationPayload(payload)
+}
+
+export async function getInterpolationTimeline(
+  metric: InterpolationMetric,
+  date: string,
+  gridSizeMeters = DEFAULT_INTERPOLATION_GRID_SIZE_METERS,
+  signal?: AbortSignal,
+): Promise<InterpolationTimeline> {
+  const query = new URLSearchParams({
+    metric,
+    date,
+    grid_size_meters: String(gridSizeMeters),
+  })
+
+  const response = await fetch(`${API_BASE_URL}/interpolation/timeline?${query.toString()}`, {
+    signal,
+  })
+
+  if (!response.ok) {
+    let detail = `Failed to fetch interpolation timeline (${metric}): ${response.status}`
+
+    try {
+      const errorPayload = (await response.json()) as { detail?: string }
+      if (typeof errorPayload.detail === 'string' && errorPayload.detail.length > 0) {
+        detail = errorPayload.detail
+      }
+    } catch {
+      // Keep default fallback message when backend did not return JSON.
+    }
+
+    throw new Error(detail)
+  }
+
+  const payload = (await response.json()) as BackendInterpolationTimelineResponse
+  return adaptInterpolationTimelinePayload(payload)
 }
 
 export async function getSensorHistoryById(
