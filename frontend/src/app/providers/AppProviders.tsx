@@ -1,5 +1,11 @@
 import type { PropsWithChildren } from 'react'
+import { BrowserRouter } from 'react-router-dom'
+import { SensorDataProvider } from './SensorDataProvider'
 
 export function AppProviders({ children }: PropsWithChildren) {
-  return <>{children}</>
+  return (
+    <BrowserRouter>
+      <SensorDataProvider>{children}</SensorDataProvider>
+    </BrowserRouter>
+  )
 }

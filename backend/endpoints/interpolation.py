@@ -1,13 +1,25 @@
+from datetime import date
+
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 
 from config import get_settings
 from schemas import (
     InterpolationBoundingBox,
     InterpolationGridQuery,
+    InterpolationTimelineResponse,
     InterpolationMaskedGridResponse,
     InterpolationMetric,
+    TimestepMetricItem,
+    TimestepMetricsResponse,
 )
-from services import GridInterpolationService, SensorPoint, SensorService
+from services import (
+    GridInterpolationService,
+    InterpolationTimelineLoaderService,
+    InterpolationTimelineNotFoundError,
+    MetricsService,
+    SensorPoint,
+    SensorService,
+)
 from services.grid import build_grid_cells, derive_bbox_from_sensors
 from services.grid.models import BoundingBox
 
@@ -22,6 +34,14 @@ def get_sensor_service() -> SensorService:
 
 def get_interpolation_service() -> GridInterpolationService:
     return GridInterpolationService(get_settings())
+
+
+def get_timeline_loader_service() -> InterpolationTimelineLoaderService:
+    return InterpolationTimelineLoaderService(get_settings())
+
+
+def get_metrics_service() -> MetricsService:
+    return MetricsService(get_settings())
 
 
 def parse_interpolation_query(
@@ -138,4 +158,63 @@ def get_interpolated_grid(
         cell_size_m=query.grid_size_meters,
         values=interpolated_grid.values,
         mask=interpolated_grid.mask,
+    )
+
+
+@router.get("/timeline", response_model=InterpolationTimelineResponse)
+def get_interpolated_timeline(
+    metric: InterpolationMetric,
+    date_value: date = Query(alias="date"),
+    grid_size_meters: float = Query(100.0, ge=50.0, le=200.0),
+    timeline_loader: InterpolationTimelineLoaderService = Depends(get_timeline_loader_service),
+) -> InterpolationTimelineResponse:
+    try:
+        return timeline_loader.load_timeline(
+            metric=metric,
+            timeline_date=date_value,
+            grid_size_meters=grid_size_meters,
+        )
+    except InterpolationTimelineNotFoundError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=(
+                "Precomputed interpolation timeline does not exist for the requested "
+                "metric/date/grid size. Generate the artifact first."
+            ),
+        ) from exc
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail=str(exc),
+        ) from exc
+
+
+@router.get("/metrics", response_model=TimestepMetricsResponse)
+def get_interpolated_timestep_metrics(
+    date_value: date = Query(alias="date"),
+    metrics_service: MetricsService = Depends(get_metrics_service),
+) -> TimestepMetricsResponse:
+    try:
+        rows = metrics_service.list_metrics_by_date(date_value)
+    except Exception as exc:
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            detail="Could not fetch interpolation timestep metrics from data source.",
+        ) from exc
+
+    items = [
+        TimestepMetricItem(
+            timestamp_utc=str(row["timestamp_utc"]),
+            avg_aqi=row.get("avg_aqi"),
+            avg_temperature_c=row.get("avg_temperature_c"),
+            sensor_count_aqi=int(row.get("sensor_count_aqi") or 0),
+            sensor_count_temperature=int(row.get("sensor_count_temperature") or 0),
+        )
+        for row in rows
+    ]
+
+    return TimestepMetricsResponse(
+        date=date_value,
+        count=len(items),
+        items=items,
     )

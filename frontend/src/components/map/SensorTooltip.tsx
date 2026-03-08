@@ -22,8 +22,10 @@ export function SensorTooltip({
 }: SensorTooltipProps) {
   return (
     <div className="sensor-tooltip">
-      <div className="sensor-tooltip__title">{sensor.name}</div>
-      <div className="sensor-tooltip__sensor-id">{sensor.id}</div>
+      <div className="sensor-tooltip__header">
+        <div className="sensor-tooltip__title">{sensor.name}</div>
+        <div className="sensor-tooltip__sensor-id">#{sensor.id}</div>
+      </div>
 
       {isLoading && <div className="sensor-tooltip__loading">Loading weather data...</div>}
 
@@ -32,32 +34,35 @@ export function SensorTooltip({
       )}
 
       {!isLoading && reading && (
-        <dl className="sensor-tooltip__stats">
-          <div className="sensor-tooltip__row">
-            <dt>Temperature</dt>
-            <dd>{toTemperatureLabel(reading)}</dd>
+        <>
+          <div className="sensor-tooltip__timestamp">
+            <span className="sensor-tooltip__timestamp-label">Current Reading</span>
+            <span className="sensor-tooltip__timestamp-value">{toTimestampLabel(reading)}</span>
           </div>
-          <div className="sensor-tooltip__row">
-            <dt>Humidity</dt>
-            <dd>{toHumidityLabel(reading)}</dd>
-          </div>
-          <div className="sensor-tooltip__row">
-            <dt>Wind</dt>
-            <dd>{toWindSpeedLabel(reading)}</dd>
-          </div>
-          <div className="sensor-tooltip__row">
-            <dt>Pressure</dt>
-            <dd>{toAirPressureLabel(reading)}</dd>
-          </div>
-          <div className="sensor-tooltip__row">
-            <dt>AQI</dt>
-            <dd>{toAqiLabel(reading)}</dd>
-          </div>
-          <div className="sensor-tooltip__row sensor-tooltip__row--timestamp">
-            <dt>Timestamp</dt>
-            <dd>{toTimestampLabel(reading)}</dd>
-          </div>
-        </dl>
+          
+          <dl className="sensor-tooltip__stats">
+            <div className="sensor-tooltip__row">
+              <dt>Temperature</dt>
+              <dd>{toTemperatureLabel(reading)}</dd>
+            </div>
+            <div className="sensor-tooltip__row">
+              <dt>Humidity</dt>
+              <dd>{toHumidityLabel(reading)}</dd>
+            </div>
+            <div className="sensor-tooltip__row">
+              <dt>Wind</dt>
+              <dd>{toWindSpeedLabel(reading)}</dd>
+            </div>
+            <div className="sensor-tooltip__row">
+              <dt>Pressure</dt>
+              <dd>{toAirPressureLabel(reading)}</dd>
+            </div>
+            <div className="sensor-tooltip__row">
+              <dt>AQI</dt>
+              <dd>{toAqiLabel(reading)}</dd>
+            </div>
+          </dl>
+        </>
       )}
     </div>
   )

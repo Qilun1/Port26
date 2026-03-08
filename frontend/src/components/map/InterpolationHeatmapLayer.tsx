@@ -1,22 +1,56 @@
 import { useMemo } from 'react'
 import { Layer, Source } from 'react-map-gl/maplibre'
 import type { LayerProps } from 'react-map-gl/maplibre'
-import type {
-  InterpolatedGrid,
-  InterpolationMetric,
-} from '../../features/sensors/model/interpolation'
-import { createInterpolationSurface } from '../../lib/map/interpolationSurface'
+import type { InterpolationMetric } from '../../features/sensors/model/interpolation'
+import type { ColorMode } from '../../features/sensors/model/colorMode'
+import type { InterpolationTimeline } from '../../features/sensors/model/interpolationTimeline'
+import {
+  buildSparseSurfaceContext,
+  createSparseInterpolationSurface,
+} from '../../lib/map/interpolationSurface'
 
 const SOURCE_ID = 'interpolation-surface-source'
 const LAYER_ID = 'interpolation-surface-layer'
 
 interface Props {
-  grid: InterpolatedGrid
+  timeline: InterpolationTimeline
+  currentValues: ArrayLike<number>
   metric: InterpolationMetric
+  colorMode: ColorMode
+  relativeColorRange: number | null
 }
 
-export function InterpolationHeatmapLayer({ grid, metric }: Props) {
-  const surface = useMemo(() => createInterpolationSurface(grid, metric), [grid, metric])
+export function InterpolationHeatmapLayer({
+  timeline,
+  currentValues,
+  metric,
+  colorMode,
+  relativeColorRange,
+}: Props) {
+  const staticContext = useMemo(
+    () =>
+      buildSparseSurfaceContext(
+        timeline.rows,
+        timeline.cols,
+        timeline.boundingBox,
+        timeline.activeIndices,
+        timeline.frames.map((frame) => frame.values),
+      ),
+    [timeline],
+  )
+
+  const surface = useMemo(() => {
+    if (!staticContext) {
+      return null
+    }
+    return createSparseInterpolationSurface(
+      staticContext,
+      metric,
+      colorMode,
+      currentValues,
+      relativeColorRange,
+    )
+  }, [staticContext, metric, colorMode, currentValues, relativeColorRange])
 
   if (!surface) {
     return null
@@ -29,6 +63,7 @@ export function InterpolationHeatmapLayer({ grid, metric }: Props) {
     paint: {
       'raster-opacity': 0.66,
       'raster-resampling': 'linear',
+      'raster-fade-duration': 260,
     },
   }
 

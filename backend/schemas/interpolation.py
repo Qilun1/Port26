@@ -1,3 +1,4 @@
+from datetime import date, datetime
 from enum import Enum
 
 from pydantic import BaseModel, Field, model_validator
@@ -102,3 +103,62 @@ class InterpolationMaskedGridResponse(BaseModel):
                 raise ValueError("uncovered cells (mask=0) must have null value.")
 
         return self
+
+
+class InterpolationTimelineFrame(BaseModel):
+    timestamp: datetime
+    values: list[float]
+
+
+class InterpolationTimelineResponse(BaseModel):
+    metric: InterpolationMetric
+    date: date
+    grid_size_meters: float = Field(gt=0)
+    rows: int = Field(ge=0)
+    cols: int = Field(ge=0)
+    bounding_box: InterpolationBoundingBox
+    active_indices: list[int]
+    timestamps: list[datetime]
+    frames: list[InterpolationTimelineFrame]
+
+    @model_validator(mode="after")
+    def validate_timeline(self) -> "InterpolationTimelineResponse":
+        expected_grid_length = self.rows * self.cols
+
+        if len(self.timestamps) != len(self.frames):
+            raise ValueError("timestamps length must equal frames length.")
+
+        if not self.active_indices:
+            raise ValueError("active_indices cannot be empty.")
+
+        previous_index = -1
+        for index in self.active_indices:
+            if index < 0 or index >= expected_grid_length:
+                raise ValueError("active_indices entries must be valid row-major indexes.")
+            if index <= previous_index:
+                raise ValueError("active_indices must be strictly increasing.")
+            previous_index = index
+
+        expected_frame_length = len(self.active_indices)
+
+        for index, frame in enumerate(self.frames):
+            if len(frame.values) != expected_frame_length:
+                raise ValueError("each frame values length must equal active_indices length.")
+            if frame.timestamp != self.timestamps[index]:
+                raise ValueError("frame timestamps must match top-level timestamps order.")
+
+        return self
+
+
+class TimestepMetricItem(BaseModel):
+    timestamp_utc: datetime
+    avg_aqi: float | None
+    avg_temperature_c: float | None
+    sensor_count_aqi: int = Field(ge=0)
+    sensor_count_temperature: int = Field(ge=0)
+
+
+class TimestepMetricsResponse(BaseModel):
+    date: date
+    count: int = Field(ge=0)
+    items: list[TimestepMetricItem]

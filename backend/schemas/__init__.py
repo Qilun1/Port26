@@ -1,10 +1,14 @@
 from .interpolation import (
 	InterpolationBoundingBox,
+	InterpolationTimelineFrame,
+	InterpolationTimelineResponse,
 	InterpolationMaskedGridResponse,
 	InterpolationGridPoint,
 	InterpolationGridQuery,
 	InterpolationGridResponse,
 	InterpolationMetric,
+	TimestepMetricItem,
+	TimestepMetricsResponse,
 )
 from .sensor import (
 	SensorHistoryReadingItem,
@@ -21,7 +25,11 @@ __all__ = [
 	"InterpolationMetric",
 	"InterpolationGridQuery",
 	"InterpolationBoundingBox",
+	"InterpolationTimelineFrame",
+	"InterpolationTimelineResponse",
 	"InterpolationMaskedGridResponse",
 	"InterpolationGridPoint",
 	"InterpolationGridResponse",
+	"TimestepMetricItem",
+	"TimestepMetricsResponse",
 ]

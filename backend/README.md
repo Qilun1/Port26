@@ -75,6 +75,48 @@ Useful options:
 - `--interval-minutes 15`: 96 rows per sensor per day
 - `--seed 26026`: deterministic output
 
+## Generate Precomputed Interpolation Meshes (Offline)
+
+Generate one-day interpolation frames (96 x 15-minute frames) and store them on disk for playback.
+**Required:** Run after generating sensor readings. Generate for both metrics (AQI and Temperature).
+
+```bash
+# Generate AQI interpolation mesh (Linux/macOS)
+uv run python services/scripts/generate_interpolation_timeline_day.py \
+	--metric aqi \
+	--date 2026-03-07 \
+	--grid-size-meters 100
+
+# Generate Temperature interpolation mesh (Linux/macOS)
+uv run python services/scripts/generate_interpolation_timeline_day.py \
+	--metric temperature \
+	--date 2026-03-07 \
+	--grid-size-meters 100
+```
+
+```powershell
+# Generate AQI interpolation mesh (Windows PowerShell)
+uv run python services/scripts/generate_interpolation_timeline_day.py `
+	--metric aqi `
+	--date 2026-03-07 `
+	--grid-size-meters 100
+
+# Generate Temperature interpolation mesh (Windows PowerShell)
+uv run python services/scripts/generate_interpolation_timeline_day.py `
+	--metric temperature `
+	--date 2026-03-07 `
+	--grid-size-meters 100
+```
+
+Configuration:
+- **Coverage radius**: 1.5 km (each sensor influences grid cells within 1.5 km)
+- **Edge cutoff**: Grid cells >1.5 km from any sensor are masked as inactive
+- **Grid resolution**: 100m cells (configurable via `--grid-size-meters`)
+
+Output location (default): `backend/data/interpolation_timelines/`
+
+Filename convention: `{metric}_{date}_{grid_size}m.json` (example: `aqi_2026-03-07_100m.json`)
+
 ## Implemented Endpoints
 
 ### `GET /sensors`
@@ -132,6 +174,49 @@ Example response:
 ```
 
 Transfer limit: 20,000 points. Returns 422 if grid is too large.
+
+### `GET /interpolation/timeline`
+Returns one day of precomputed interpolation frames loaded from local backend storage.
+
+Query parameters:
+- `metric` (required): `"temperature"` or `"aqi"`
+- `date` (required): day in `YYYY-MM-DD`
+- `grid_size_meters` (optional): default `100`, range `50`-`200`
+
+Behavior:
+- Reads precomputed artifact from disk (no request-time interpolation recompute)
+- Returns 404 when the artifact file is missing
+- Keeps fixed grid geometry (`rows`, `cols`, `bounding_box`) across frames
+- Uses sparse playback payload: `active_indices` + frame `values` aligned to those indices
+
+### `GET /sensors/{sensor_id}/readings`
+Returns historical time-series data for a specific sensor.
+
+Example response:
+```json
+{
+	"data": [
+		{
+			"timestamp": "2026-03-07T00:00:00+02:00",
+			"aqi": 32,
+			"temperature_c": 8.5
+		}
+	],
+	"count": 96
+}
+```
+
+Returns 404 if sensor does not exist. Currently returns all available readings (MVP scope: single day, no date filtering).
+
+## Recent Changes
+
+- **Time-Series Data**: Added `sensor_readings` table with trigger-based sync to `sensors.latest_*` fields
+- **Historical Endpoint**: New `GET /sensors/{sensor_id}/readings` for time-series queries
+- **Data Simulator**: `generate_sensor_readings_day.py` script with spatial smoothing, diurnal oscillation, and rush-hour AQI peaks
+- **Sensor Filtering**: Added `enabled` column to filter active sensors
+- **Interpolation Timeline MVP**: Added offline timeline generator (`generate_interpolation_timeline_day.py`) and `GET /interpolation/timeline` disk loader for 96-frame daily playback at 15-minute intervals
+- **Sparse Timeline Optimization**: Timeline artifacts store stable `active_indices` plus per-frame sparse values for efficient transfer (frontend handles minute-resolution smoothing via linear interpolation)
+- **Timeline Artifact Storage**: Timeline JSON files stored in `backend/data/interpolation_timelines/` with naming convention `{metric}_{date}_{grid_size}m.json`
 
 ## Endpoint Extension Pattern
 

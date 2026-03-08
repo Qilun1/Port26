@@ -3,7 +3,7 @@ import type { ViewState } from 'react-map-gl/maplibre'
 export const helsinkiInitialView: ViewState = {
   latitude: 60.1699,
   longitude: 24.9384,
-  zoom: 10.6,
+  zoom: 11.6,
   bearing: 0,
   pitch: 0,
   padding: { top: 0, bottom: 0, left: 0, right: 0 },

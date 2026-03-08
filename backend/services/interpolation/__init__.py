@@ -10,6 +10,12 @@ from .idw import (
 )
 from .models import InterpolatedGridCell, InterpolatedGridMatrix, SensorPoint
 from .service import GridInterpolationService, build_default_interpolation_service
+from .sparse import extract_active_indices, extract_sparse_values, flatten_index
+from .timeline_loader import (
+    InterpolationTimelineLoaderService,
+    InterpolationTimelineNotFoundError,
+    build_default_timeline_loader_service,
+)
 
 __all__ = [
     "SensorPoint",
@@ -25,4 +31,10 @@ __all__ = [
     "interpolate_local_idw_point",
     "GridInterpolationService",
     "build_default_interpolation_service",
+    "flatten_index",
+    "extract_active_indices",
+    "extract_sparse_values",
+    "InterpolationTimelineLoaderService",
+    "InterpolationTimelineNotFoundError",
+    "build_default_timeline_loader_service",
 ]
