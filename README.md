@@ -1,5 +1,9 @@
 # WeatherSens — Urban Weather Downscaling and Sensor-Aware Environmental Mapping
 
+![WeatherSens dashboard preview](map-preview.png)
+
+WeatherSens dashboard preview showing the Helsinki-region map interface, animated 3D sensor bars, relative AQI difference overlay, time controls, and compact monitoring widgets.
+
 WeatherSens is a weather intelligence and environmental sensing project developed during the Port26 hackathon at Aalto University. The project combines sparse sensor observations, coarse meteorological fields, and spatial modelling workflows to produce denser, more locally meaningful weather information for urban environments.
 
 The core motivation is straightforward: city-scale weather varies block by block, but direct observations are sparse and large-scale forecast products are often too coarse to reflect local urban effects. WeatherSens addresses this by combining observational data, interpolation, and machine-learning-based downscaling into a single workflow that supports both analysis and visualization.
@@ -13,13 +17,9 @@ The core motivation is straightforward: city-scale weather varies block by block
 | Interpolation API | FastAPI service for sensor access, history queries, and inverse-distance-weighted interpolation outputs |
 | Interactive Map Frontend | React and TypeScript frontend for exploring sensors, time series, and gridded weather products in geographic context |
 | Plotting and Diagnostics | Validation plots, learning curves, map outputs, and re-plotting workflows for model inspection and presentation |
-| Live Snapshot Workflow | One-step IFS plus FMI workflow for producing a current dense weather estimate from live meteorological inputs |
+![WeatherSens dashboard preview showing the Helsinki-region map interface, animated 3D sensor bars, relative AQI difference overlay, time controls, and compact monitoring widgets](map-preview.png)
 
 ## Dashboard Preview
-
-![WeatherSens dashboard preview](map-preview.png)
-
-WeatherSens dashboard preview showing the Helsinki-region map interface, animated 3D sensor bars, relative AQI difference overlay, time controls, and compact monitoring widgets.
 
 The current dashboard presents WeatherSens as a dense, map-based urban weather interface rather than a conventional tabular monitoring tool. The frontend combines a dark geospatial basemap with layered environmental overlays, animated sensor bars, and time-aware controls for exploring spatial differences across the Helsinki region.
 
@@ -77,7 +77,7 @@ Although it was built in a hackathon setting, the project is structured around a
 
 ## Team
 
-Port26 hackathon at Aalto University
+WeatherSens was developed by a multidisciplinary team during the Port26 hackathon at Aalto University. Together, the team designed the end-to-end prototype, including the urban weather modelling workflow, backend API, and interactive map-based frontend.
 
 Atte Laakso · Nikolas Juhava · Aarni Nordström · Manu Mäkinen · Qilun Li
 
