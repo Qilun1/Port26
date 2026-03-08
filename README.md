@@ -17,7 +17,6 @@ The core motivation is straightforward: city-scale weather varies block by block
 | Interpolation API | FastAPI service for sensor access, history queries, and inverse-distance-weighted interpolation outputs |
 | Interactive Map Frontend | React and TypeScript frontend for exploring sensors, time series, and gridded weather products in geographic context |
 | Plotting and Diagnostics | Validation plots, learning curves, map outputs, and re-plotting workflows for model inspection and presentation |
-![WeatherSens dashboard preview showing the Helsinki-region map interface, animated 3D sensor bars, relative AQI difference overlay, time controls, and compact monitoring widgets](map-preview.png)
 
 ## Dashboard Preview
 
