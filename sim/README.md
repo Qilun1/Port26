@@ -1,4 +1,4 @@
-# Simulation Pipeline
+# WeatherSens Simulation Pipeline
 
 This folder contains the downscaling workflow for training weather residual models and running dense-grid inference over a chosen area.
 
@@ -8,7 +8,7 @@ This README is intentionally short. For detailed setup, configuration, input for
 
 1. Create one Python environment for the repo.
 2. Install the dependencies from [sim/pyproject.toml](sim/pyproject.toml).
-3. Treat `sim/port26_sim.egg-info/` as generated packaging metadata, not as a config file you should edit.
+3. Treat `sim/port26_sim.egg-info/` as generated packaging metadata from a legacy package name, not as a config file you should edit.
 4. Add Copernicus credentials in `.env`.
 5. Copy [sim/project.example.toml](sim/project.example.toml) to `sim/project.toml` and set your area, dates, targets, and run name.
 6. Fetch training data.

@@ -1,6 +1,6 @@
-# Port26
+# WeatherSens
 
-Port26 is a multi-part weather and environmental sensing project developed during the Port26 hackathon at Aalto University. The project investigates how sparse real-world weather observations and coarse meteorological fields can be combined to produce denser, more locally meaningful environmental information for urban areas.
+WeatherSens is a multi-part weather and environmental sensing project developed during the Port26 hackathon at Aalto University. The project investigates how sparse real-world weather observations and coarse meteorological fields can be combined to produce denser, more locally meaningful environmental information for urban areas.
 
 In practical terms, the repository brings together three connected components:
 
@@ -14,7 +14,7 @@ The repository is structured so the modelling workflow, serving layer, and visua
 
 Urban weather and environmental conditions can vary substantially across short distances due to built form, land cover, proximity to water, traffic, and other local effects. However, direct observations are typically available only at a limited number of sensor or station locations, while numerical weather products often operate at a coarser spatial resolution than is useful for neighborhood-level analysis.
 
-Port26 addresses this gap by exploring a workflow in which:
+WeatherSens addresses this gap by exploring a workflow in which:
 
 - station and sensor observations provide local ground-truth signals
 - coarse meteorological fields provide broader spatial and temporal context
@@ -38,7 +38,7 @@ From an academic or prototyping perspective, the repository can be viewed as an 
 
 ## Project Origin
 
-Port26 was created in the context of the Port26 hackathon at Aalto University. That origin matters to the structure of the repository: it combines rapid prototyping with a research-style workflow, where data acquisition, modelling, evaluation, API serving, and visualization are all developed together in a single working codebase.
+WeatherSens was created in the context of the Port26 hackathon at Aalto University. That origin matters to the structure of the repository: it combines rapid prototyping with a research-style workflow, where data acquisition, modelling, evaluation, API serving, and visualization are all developed together in a single working codebase.
 
 ## Repository Overview
 
@@ -221,7 +221,7 @@ The repo contains generated and derived outputs under locations such as:
 
 - `data/inference_runs/`
 - `sim/models/runs/`
-- `sim/port26_sim.egg-info/`
+- `sim/port26_sim.egg-info/` (legacy packaging name)
 
 Treat these as outputs or packaging artifacts unless a specific workflow tells you to edit them.
 
