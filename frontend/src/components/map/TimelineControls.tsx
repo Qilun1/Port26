@@ -15,16 +15,9 @@ const PLAYBACK_SPEEDS: Array<{ speed: 1 | 2 | 4; label: string; title: string }>
   { speed: 4, label: '4x', title: 'Skip 4 minutes per step' },
 ]
 
-function formatMinuteClock(minuteIndex: number): string {
-  const safeMinute = Math.max(0, Math.min(1439, Math.floor(minuteIndex)))
-  const hours = Math.floor(safeMinute / 60)
-  const minutes = safeMinute % 60
-  return `${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}`
-}
-
 export function TimelineControls({
   minuteCount,
-  currentMinuteIndex,
+  currentMinuteIndex: _currentMinuteIndex,
   playbackSpeed,
   isLoading,
   onTogglePlayback,
@@ -61,10 +54,6 @@ export function TimelineControls({
             <span>{item.label}</span>
           </button>
         ))}
-      </div>
-
-      <div className="timeline-controls__label" aria-live="polite">
-        {formatMinuteClock(currentMinuteIndex)}
       </div>
     </div>
   )

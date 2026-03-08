@@ -13,13 +13,16 @@ export const TEMPERATURE_COLOR_STOPS: ColorStop[] = [
   { t: 1, rgb: [255, 111, 97] },
 ]
 
-export const RELATIVE_BLUE: [number, number, number] = [68, 132, 255]
-export const RELATIVE_WHITE: [number, number, number] = [245, 246, 248]
-export const RELATIVE_RED: [number, number, number] = [237, 85, 102]
+export const RELATIVE_BLUE: [number, number, number] = [38, 102, 255]
+export const RELATIVE_WHITE: [number, number, number] = [240, 242, 245]
+export const RELATIVE_RED: [number, number, number] = [255, 65, 85]
+
+export const AQI_RELATIVE_LIGHT_GREEN: [number, number, number] = [144, 238, 144]
+export const AQI_RELATIVE_DEEP_PURPLE: [number, number, number] = [75, 0, 130]
 
 export const RELATIVE_COLOR_RANGE: Record<InterpolationMetric, number> = {
-  temperature: 1.5,
-  aqi: 8,
+  temperature: 1.2,
+  aqi: 6,
 }
 
 function clamp(value: number, minValue: number, maxValue: number): number {
@@ -117,14 +120,25 @@ export function computeRelativeRange(
 export function relativeValueToColor(
   relativeValue: number,
   relativeRange: number,
+  metric: InterpolationMetric,
   alpha: number,
 ): [number, number, number, number] {
   const safeRange = Math.max(relativeRange, 1e-6)
-  const normalized = clamp((relativeValue / safeRange + 1) * 0.5, 0, 1)
+  const absValue = Math.abs(relativeValue)
+  const normalized = clamp(absValue / safeRange, 0, 1)
 
-  const rgb = normalized <= 0.5
-    ? interpolateRgb(RELATIVE_BLUE, RELATIVE_WHITE, normalized / 0.5)
-    : interpolateRgb(RELATIVE_WHITE, RELATIVE_RED, (normalized - 0.5) / 0.5)
+  let rgb: [number, number, number]
+
+  if (metric === 'aqi') {
+    // AQI uses light green to deep purple gradient for difference magnitude
+    rgb = interpolateRgb(AQI_RELATIVE_LIGHT_GREEN, AQI_RELATIVE_DEEP_PURPLE, normalized)
+  } else {
+    // Temperature uses blue-white-red diverging gradient
+    const signedNormalized = clamp((relativeValue / safeRange + 1) * 0.5, 0, 1)
+    rgb = signedNormalized <= 0.5
+      ? interpolateRgb(RELATIVE_BLUE, RELATIVE_WHITE, signedNormalized / 0.5)
+      : interpolateRgb(RELATIVE_WHITE, RELATIVE_RED, (signedNormalized - 0.5) / 0.5)
+  }
 
   return [rgb[0], rgb[1], rgb[2], alpha]
 }
@@ -140,7 +154,7 @@ export function resolveColorValueRgba(
   alpha: number,
 ): [number, number, number, number] {
   if (colorMode === 'relative') {
-    return relativeValueToColor(value - frameMean, relativeRange, alpha)
+    return relativeValueToColor(value - frameMean, relativeRange, metric, alpha)
   }
 
   if (metric === 'aqi') {
@@ -156,26 +170,64 @@ export function resolveColorValueRgba(
   )
 }
 
-function toCssGradient(stops: Array<{ t: number; rgb: [number, number, number] }>): string {
+function toCssGradient(
+  stops: Array<{ t: number; rgb: [number, number, number] }>,
+  direction: 'to right' | 'to bottom' = 'to right',
+): string {
   const tokens = stops.map((stop) => {
     const percent = Math.round(stop.t * 100)
     return `rgb(${stop.rgb[0]}, ${stop.rgb[1]}, ${stop.rgb[2]}) ${percent}%`
   })
-  return `linear-gradient(to right, ${tokens.join(', ')})`
+  return `linear-gradient(${direction}, ${tokens.join(', ')})`
 }
 
-export function getLegendGradient(metric: InterpolationMetric, colorMode: ColorMode): string {
+export function getLegendGradient(
+  metric: InterpolationMetric,
+  colorMode: ColorMode,
+  vertical: boolean = false,
+): string {
+  const direction = vertical ? 'to bottom' : 'to right'
+  
   if (colorMode === 'relative') {
-    return toCssGradient([
-      { t: 0, rgb: RELATIVE_BLUE },
-      { t: 0.5, rgb: RELATIVE_WHITE },
-      { t: 1, rgb: RELATIVE_RED },
-    ])
+    if (metric === 'aqi') {
+      // Vertical: max at top, min at bottom (reverse order)
+      const stops = vertical
+        ? [
+            { t: 0, rgb: AQI_RELATIVE_DEEP_PURPLE },
+            { t: 1, rgb: AQI_RELATIVE_LIGHT_GREEN },
+          ]
+        : [
+            { t: 0, rgb: AQI_RELATIVE_LIGHT_GREEN },
+            { t: 1, rgb: AQI_RELATIVE_DEEP_PURPLE },
+          ]
+      return toCssGradient(stops, direction)
+    }
+    // Vertical: max at top, min at bottom (reverse order)
+    const stops = vertical
+      ? [
+          { t: 0, rgb: RELATIVE_RED },
+          { t: 0.5, rgb: RELATIVE_WHITE },
+          { t: 1, rgb: RELATIVE_BLUE },
+        ]
+      : [
+          { t: 0, rgb: RELATIVE_BLUE },
+          { t: 0.5, rgb: RELATIVE_WHITE },
+          { t: 1, rgb: RELATIVE_RED },
+        ]
+    return toCssGradient(stops, direction)
   }
 
   if (metric === 'aqi') {
-    return getPaletteGradient()
+    return getPaletteGradient(direction, vertical)
   }
 
-  return toCssGradient(TEMPERATURE_COLOR_STOPS)
+  // Vertical: reverse temperature stops for top-to-bottom
+  const stops = vertical
+    ? [
+        { t: 0, rgb: TEMPERATURE_COLOR_STOPS[2].rgb },
+        { t: 0.5, rgb: TEMPERATURE_COLOR_STOPS[1].rgb },
+        { t: 1, rgb: TEMPERATURE_COLOR_STOPS[0].rgb },
+      ]
+    : TEMPERATURE_COLOR_STOPS
+  return toCssGradient(stops, direction)
 }

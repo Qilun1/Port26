@@ -39,11 +39,10 @@ export function ColorBarLegend({
   )
 
   const gradientStyle = useMemo(
-    () => ({ backgroundImage: getLegendGradient(metric, colorMode) }),
+    () => ({ backgroundImage: getLegendGradient(metric, colorMode, true) }),
     [metric, colorMode],
   )
 
-  const metricLabel = metric === 'aqi' ? 'AQI' : '°C'
   const formatValue = (val: number) => {
     if (metric === 'aqi') {
       return Math.round(val).toString()
@@ -55,7 +54,9 @@ export function ColorBarLegend({
   const midLabel = colorMode === 'relative' ? formatValue(0) : formatValue(midValue)
   const maxLabel = colorMode === 'relative' ? `+${formatValue(relativeRange)}` : formatValue(maxValue)
 
-  const title = colorMode === 'relative' ? `${metricLabel} delta` : metricLabel
+  const title = colorMode === 'relative' 
+    ? (metric === 'aqi' ? 'AQI Difference' : 'Temperature Difference')
+    : (metric === 'aqi' ? 'Air Quality Index' : 'Temperature °C')
   const [isTransitioning, setIsTransitioning] = useState(false)
 
   useEffect(() => {
@@ -71,22 +72,24 @@ export function ColorBarLegend({
 
   return (
     <div
-      className={`color-bar-legend${isTransitioning ? ' color-bar-legend--transitioning' : ''}`}
+      className={`color-bar-legend color-bar-legend--vertical${isTransitioning ? ' color-bar-legend--transitioning' : ''}`}
       aria-label={`${metric} color scale`}
     >
       <div className="color-bar-legend__title">{title}</div>
 
-      <div className="color-bar-legend__bar" style={gradientStyle} />
+      <div className="color-bar-legend__content">
+        <div className="color-bar-legend__bar color-bar-legend__bar--vertical" style={gradientStyle} />
 
-      <div className="color-bar-legend__labels">
-        <div className="color-bar-legend__label color-bar-legend__label--min">
-          {minLabel}
-        </div>
-        <div className="color-bar-legend__label color-bar-legend__label--mid">
-          {midLabel}
-        </div>
-        <div className="color-bar-legend__label color-bar-legend__label--max">
-          {maxLabel}
+        <div className="color-bar-legend__labels color-bar-legend__labels--vertical">
+          <div className="color-bar-legend__label color-bar-legend__label--max">
+            {maxLabel}
+          </div>
+          <div className="color-bar-legend__label color-bar-legend__label--mid">
+            {midLabel}
+          </div>
+          <div className="color-bar-legend__label color-bar-legend__label--min">
+            {minLabel}
+          </div>
         </div>
       </div>
     </div>

@@ -80,12 +80,19 @@ export function getPaletteStops(): Array<{ position: number; color: string }> {
  * Converts palette to CSS linear-gradient format.
  * Uses 0-300 range for legend display (showing common AQI values).
  */
-export function getPaletteGradient(): string {
-  const stops = AQI_COLOR_PALETTE.slice(0, -1).map((stop) => {
+export function getPaletteGradient(
+  direction: 'to right' | 'to bottom' = 'to right',
+  reverse: boolean = false,
+): string {
+  const baseStops = AQI_COLOR_PALETTE.slice(0, -1)
+  const orderedStops = reverse ? [...baseStops].reverse() : baseStops
+
+  const stops = orderedStops.map((stop) => {
     const color = `rgb(${stop.rgb[0]}, ${stop.rgb[1]}, ${stop.rgb[2]})`
-    const percent = Math.round((stop.aqi / 300) * 100)
+    const basePercent = Math.round((stop.aqi / 300) * 100)
+    const percent = reverse ? 100 - basePercent : basePercent
     return `${color} ${percent}%`
   }).join(', ')
 
-  return `linear-gradient(to right, ${stops})`
+  return `linear-gradient(${direction}, ${stops})`
 }

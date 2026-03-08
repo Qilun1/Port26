@@ -57,6 +57,34 @@ export function TimelineMetricsSeries({
   const activeDataKey = metric === 'aqi' ? 'avgAqi' : 'avgTemperatureC'
   const activeStroke = metric === 'aqi' ? '#ffb466' : '#6dd3a8'
 
+  const CustomTooltip = ({ active, payload }: any) => {
+    if (!active || !payload || payload.length === 0) {
+      return null
+    }
+
+    const value = payload[0]?.value
+    if (typeof value !== 'number') {
+      return null
+    }
+
+    return (
+      <div
+        style={{
+          background: 'rgba(20, 24, 32, 0.95)',
+          border: '1px solid rgba(255, 255, 255, 0.2)',
+          borderRadius: '4px',
+          padding: '4px 8px',
+          fontSize: '12px',
+          fontWeight: '600',
+          color: activeStroke,
+          boxShadow: '0 2px 8px rgba(0, 0, 0, 0.3)',
+        }}
+      >
+        {value.toFixed(2)}
+      </div>
+    )
+  }
+
   const handleChartClick = (state: unknown) => {
     const activeLabel = (state as { activeLabel?: unknown } | undefined)?.activeLabel
     if (typeof activeLabel === 'number' && Number.isFinite(activeLabel)) {
@@ -87,8 +115,8 @@ export function TimelineMetricsSeries({
               />
               <YAxis stroke="rgba(255, 255, 255, 0.72)" width={42} />
               <Tooltip
-                labelFormatter={(value) => formatMinuteLabel(Number(value))}
-                formatter={(value) => (typeof value === 'number' ? value.toFixed(2) : value)}
+                content={<CustomTooltip />}
+                cursor={{ stroke: 'rgba(255, 255, 255, 0.3)', strokeWidth: 1 }}
               />
               <ReferenceLine x={currentMinuteIndex} stroke="rgba(93, 196, 255, 0.85)" strokeWidth={2} />
               <Line

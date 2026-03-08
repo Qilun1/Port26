@@ -2,7 +2,7 @@ import type { InterpolationTimeline } from '../model/interpolationTimeline'
 
 export const MINUTES_PER_DAY = 24 * 60
 export const SOURCE_FRAME_INTERVAL_MINUTES = 15
-export const PLAYBACK_SIMULATED_MINUTES_PER_SECOND = 12
+export const PLAYBACK_SIMULATED_MINUTES_PER_SECOND = 4
 
 export type MinuteFrameBlendWindow = {
   startFrameIndex: number

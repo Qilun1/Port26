@@ -7,6 +7,7 @@ import {
   MdTerrain,
 } from 'react-icons/md'
 import { Popup, useMap } from 'react-map-gl/maplibre'
+import { useSensorData } from '../../app/providers/SensorDataProvider'
 import {
   getInterpolationTimeline,
   getInterpolationTimestepMetrics,
@@ -29,12 +30,12 @@ import type { SensorHistoryPoint } from '../../features/sensors/model/weatherRea
 import type { InterpolationTimestepMetricsSeries } from '../../features/sensors/model/interpolationMetrics'
 import { InterpolationHeatmapLayer } from './InterpolationHeatmapLayer'
 import { Surface3DLayer } from './Surface3DLayer'
-import { ColorBarLegend } from './ColorBarLegend'
+import { DemoZoneLayer } from './DemoZoneLayer'
+import { BottomControlsBar } from './BottomControlsBar'
+import { MemoizedSensorBarLayer } from './SensorBarLayer'
 import { SensorHistoryPanel } from './SensorHistoryPanel'
 import { SensorMarker } from './SensorMarker'
 import { SensorTooltip } from './SensorTooltip'
-import { TimelineControls } from './TimelineControls'
-import { TimelineMetricsSeries } from './TimelineMetricsSeries'
 import type { ViewMode } from '../../features/sensors/model/viewMode'
 import { computeFrameMean, computeRelativeRange } from '../../lib/map/colorScales'
 
@@ -59,8 +60,19 @@ const PLAYBACK_SPEED_MULTIPLIERS: Record<0 | 1 | 2 | 4, number> = {
   4: 4,
 }
 
+type SensorVisualizationMode = 'bars' | 'symbols' | 'off'
+
+const SENSOR_VISUAL_MODE_SEQUENCE: SensorVisualizationMode[] = ['symbols', 'bars', 'off']
+
+const SENSOR_VISUAL_MODE_LABELS: Record<SensorVisualizationMode, string> = {
+  symbols: 'Symbols',
+  bars: 'Bars',
+  off: 'Off',
+}
+
 export function SensorLayer() {
   const mapCollection = useMap()
+  const { loading: _contextLoading } = useSensorData()
   const [sensors, setSensors] = useState<Sensor[]>([])
   const [hoveredSensor, setHoveredSensor] = useState<Sensor | null>(null)
   const [selectedSensor, setSelectedSensor] = useState<Sensor | null>(null)
@@ -86,9 +98,11 @@ export function SensorLayer() {
   const [metricsErrorsByDate, setMetricsErrorsByDate] = useState<Record<string, string | null>>({})
   const [currentMinuteIndex, setCurrentMinuteIndex] = useState(0)
   const [playbackSpeed, setPlaybackSpeed] = useState<0 | 1 | 2 | 4>(0)
-  const [viewMode, setViewMode] = useState<ViewMode>('2d')
-  const [sensorsVisible, setSensorsVisible] = useState(true)
-  const [colorMode, setColorMode] = useState<ColorMode>('absolute')
+  const [viewMode, setViewMode] = useState<ViewMode>('3d')
+  const [sensorVisualizationMode, setSensorVisualizationMode] = useState<SensorVisualizationMode>('bars')
+  const [colorMode, setColorMode] = useState<ColorMode>('relative')
+  const [isDemoZoneVisible, setIsDemoZoneVisible] = useState(false)
+  const [throttledSensorBarFrameValues, setThrottledSensorBarFrameValues] = useState<ArrayLike<number>>([])
 
   const activeMetricRef = useRef<InterpolationMetric | null>(null)
   const timelineCacheRef = useRef<Partial<Record<InterpolationMetric, InterpolationTimeline>>>({})
@@ -260,6 +274,18 @@ export function SensorLayer() {
     [startTimelineLoad, startMetricsLoad],
   )
 
+  // Auto-hide demo zone when metric changes
+  useEffect(() => {
+    setIsDemoZoneVisible(false)
+  }, [activeMetric])
+
+  // Auto-load AQI metric when map mounts with sensors
+  useEffect(() => {
+    if (!isLoading && sensors.length > 0 && !activeMetric) {
+      handleMetricSelect('aqi')
+    }
+  }, [isLoading, sensors.length, activeMetric, handleMetricSelect])
+
   const handleHoverStart = useCallback((sensor: Sensor) => {
     setHoveredSensor(sensor)
   }, [])
@@ -315,6 +341,14 @@ export function SensorLayer() {
     setHistoryError(null)
   }, [])
 
+  const handleCycleSensorVisualizationMode = useCallback(() => {
+    setSensorVisualizationMode((current) => {
+      const currentIndex = SENSOR_VISUAL_MODE_SEQUENCE.indexOf(current)
+      const nextIndex = (currentIndex + 1) % SENSOR_VISUAL_MODE_SEQUENCE.length
+      return SENSOR_VISUAL_MODE_SEQUENCE[nextIndex]
+    })
+  }, [])
+
   const renderedMetric = displayMetric && timelineByMetric[displayMetric] ? displayMetric : null
   const activeTimeline = renderedMetric ? (timelineByMetric[renderedMetric] ?? null) : null
   const sourceFrameCount = activeTimeline?.frames.length ?? 0
@@ -333,6 +367,30 @@ export function SensorLayer() {
 
     return getOrCreateMinuteFrameValues(activeTimeline, currentMinuteIndex, minuteCache)
   }, [activeTimeline, renderedMetric, currentMinuteIndex])
+
+  // Throttle sensor bar visual updates to 10fps for performance during playback
+  useEffect(() => {
+    if (sensorVisualizationMode !== 'bars') {
+      return
+    }
+
+    const THROTTLE_INTERVAL_MS = 100 // 10fps
+
+    // Immediate update when not playing or on first render
+    if (playbackSpeed === 0 || currentFrameValues.length === 0) {
+      setThrottledSensorBarFrameValues(currentFrameValues)
+      return
+    }
+
+    // During playback, throttle updates
+    const intervalId = window.setInterval(() => {
+      setThrottledSensorBarFrameValues(currentFrameValues)
+    }, THROTTLE_INTERVAL_MS)
+
+    return () => {
+      window.clearInterval(intervalId)
+    }
+  }, [currentFrameValues, playbackSpeed, sensorVisualizationMode])
 
   useEffect(() => {
     if (playbackSpeed === 0 || minuteCount === 0) {
@@ -426,6 +484,10 @@ export function SensorLayer() {
     })
   }, [minuteCount])
 
+  const handleToggleDemoZone = useCallback(() => {
+    setIsDemoZoneVisible((current) => !current)
+  }, [])
+
   const reading = hoveredSensor ? toWeatherReading(hoveredSensor) : null
   const isTimelineLoading = activeMetric ? Boolean(timelineInFlightByMetric[activeMetric]) : false
   const timelineError = activeMetric ? (timelineErrorsByMetric[activeMetric] ?? null) : null
@@ -433,6 +495,20 @@ export function SensorLayer() {
   const metricsError = metricsErrorsByDate[TIMELINE_DATE] ?? null
   const isMetricsLoading = Boolean(metricsInFlightByDate[TIMELINE_DATE])
   const selectedHistory = selectedSensor ? (historyPointsBySensor[selectedSensor.id] ?? []) : []
+  const showSensorBars = sensorVisualizationMode === 'bars'
+  const showSensorSymbols = sensorVisualizationMode === 'symbols'
+
+  useEffect(() => {
+    if (showSensorSymbols) {
+      return
+    }
+
+    setHoveredSensor(null)
+    historyControllerRef.current?.abort()
+    setSelectedSensor(null)
+    setHistoryLoading(false)
+    setHistoryError(null)
+  }, [showSensorSymbols])
 
   const currentHeightAnchorValue = useMemo<number | null>(() => {
     if (!renderedMetric || !metricsSeries || metricsSeries.items.length === 0) {
@@ -509,6 +585,27 @@ export function SensorLayer() {
     return maxRange > 0 ? maxRange : null
   }, [activeTimeline, renderedMetric])
 
+  const sensorBarLayerProps = useMemo(() => ({
+    sensors,
+    metric: renderedMetric,
+    timeline: activeTimeline,
+    currentValues: throttledSensorBarFrameValues,
+    colorMode,
+    relativeColorRange: stableRelativeColorRange,
+    minValue: timelineValueRange?.minValue ?? null,
+    maxValue: timelineValueRange?.maxValue ?? null,
+    isVisible: showSensorBars,
+  }), [
+    sensors,
+    renderedMetric,
+    activeTimeline,
+    throttledSensorBarFrameValues,
+    colorMode,
+    stableRelativeColorRange,
+    timelineValueRange,
+    showSensorBars,
+  ])
+
   useEffect(() => {
     const map = mapCollection.current?.getMap()
     if (!map) {
@@ -555,6 +652,13 @@ export function SensorLayer() {
         />
       )}
 
+      {renderedMetric && (
+        <DemoZoneLayer
+          metric={renderedMetric}
+          isVisible={isDemoZoneVisible}
+        />
+      )}
+
       <div className="metric-controls" role="group" aria-label="Interpolation metric selector">
         <div className="metric-controls__segmented" role="group" aria-label="Metric selector">
           {METRICS.map((metric) => (
@@ -575,11 +679,13 @@ export function SensorLayer() {
 
         <button
           type="button"
-          className={`metric-controls__button${sensorsVisible ? ' metric-controls__button--active' : ''}`}
-          onClick={() => setSensorsVisible(!sensorsVisible)}
-          title={sensorsVisible ? 'Hide sensors' : 'Show sensors'}
+          className={`metric-controls__button${sensorVisualizationMode !== 'off' ? ' metric-controls__button--active' : ''}`}
+          onClick={handleCycleSensorVisualizationMode}
+          title="Cycle sensor visualization mode: Symbols, Bars, Off"
         >
-          <span className="metric-controls__button-label">Sensors: {sensorsVisible ? 'On' : 'Off'}</span>
+          <span className="metric-controls__button-label">
+            Sensors: {SENSOR_VISUAL_MODE_LABELS[sensorVisualizationMode]}
+          </span>
           <span className="metric-controls__button-icon" aria-hidden="true"><MdSensors /></span>
         </button>
 
@@ -617,30 +723,33 @@ export function SensorLayer() {
         </div>
       </div>
 
-      {activeTimeline && (
-        <>
-          <div className="timeline-floating-controls">
-            <TimelineControls
-              minuteCount={minuteCount}
-              currentMinuteIndex={currentMinuteIndex}
-              playbackSpeed={playbackSpeed}
-              isLoading={isTimelineLoading}
-              onTogglePlayback={handleTogglePlayback}
-              onChangePlaybackSpeed={handleChangePlaybackSpeed}
-            />
-          </div>
+      {activeTimeline && renderedMetric && timelineValueRange && (
+        <BottomControlsBar
+          minuteCount={minuteCount}
+          currentMinuteIndex={currentMinuteIndex}
+          playbackSpeed={playbackSpeed}
+          isTimelineLoading={isTimelineLoading}
+          onTogglePlayback={handleTogglePlayback}
+          onChangePlaybackSpeed={handleChangePlaybackSpeed}
+          metric={renderedMetric}
+          series={metricsSeries}
+          metricsError={metricsError}
+          isMetricsLoading={isMetricsLoading}
+          onSeek={handleSeek}
+          colorMode={colorMode}
+          currentValues={currentFrameValues}
+          relativeColorRange={stableRelativeColorRange}
+          minValue={timelineValueRange.minValue}
+          maxValue={timelineValueRange.maxValue}
+          showColorBar={true}
+          timelineDate={TIMELINE_DATE}
+          onToggleDemoZone={handleToggleDemoZone}
+          isDemoZoneVisible={isDemoZoneVisible}
+        />
+      )}
 
-          {renderedMetric && (
-            <TimelineMetricsSeries
-              metric={renderedMetric}
-              series={metricsSeries}
-              currentMinuteIndex={currentMinuteIndex}
-              isLoading={isMetricsLoading}
-              error={metricsError}
-              onSeek={handleSeek}
-            />
-          )}
-        </>
+      {renderedMetric && (
+        <MemoizedSensorBarLayer {...sensorBarLayerProps} />
       )}
 
       {sensors.map((sensor) => (
@@ -650,7 +759,8 @@ export function SensorLayer() {
           onHoverStart={handleHoverStart}
           onHoverEnd={handleHoverEnd}
           onClick={handleSensorClick}
-          isVisible={sensorsVisible}
+          isVisible={showSensorSymbols}
+          isSelected={selectedSensor?.id === sensor.id}
         />
       ))}
 
@@ -679,17 +789,6 @@ export function SensorLayer() {
           isLoading={historyLoading}
           error={historyError}
           onClose={handlePanelClose}
-        />
-      )}
-
-      {renderedMetric && activeTimeline && timelineValueRange && (
-        <ColorBarLegend
-          metric={renderedMetric}
-          colorMode={colorMode}
-          currentValues={currentFrameValues}
-          relativeColorRange={stableRelativeColorRange}
-          minValue={timelineValueRange.minValue}
-          maxValue={timelineValueRange.maxValue}
         />
       )}
     </>

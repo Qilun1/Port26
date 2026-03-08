@@ -8,7 +8,7 @@ import type { InterpolationTimeline } from '../../features/sensors/model/interpo
 import { buildSurfaceMeshContext } from '../../lib/map/surfaceMesh'
 import { SURFACE_CONTOUR_CONFIG } from '../../lib/map/contour-config'
 import {
-  SURFACE_HEIGHT_SCALE,
+  getSurfaceHeightScale,
   updateSurfaceColors,
   updateSurfaceNormalizedValues,
   updateSurfacePositions,
@@ -222,7 +222,7 @@ function buildCustomLayer(
         meshContext.basePositions,
         frameValuesRef.current,
         anchorValue,
-        SURFACE_HEIGHT_SCALE * meshContext.meterToMercator,
+        getSurfaceHeightScale(metricRef.current) * meshContext.meterToMercator,
         targetPositions,
       )
 
@@ -307,7 +307,7 @@ function buildCustomLayer(
           meshContext.basePositions,
           frameValuesRef.current,
           anchorValue,
-          SURFACE_HEIGHT_SCALE * meshContext.meterToMercator,
+          getSurfaceHeightScale(metricRef.current) * meshContext.meterToMercator,
           buffers.targetPositions,
         )
 

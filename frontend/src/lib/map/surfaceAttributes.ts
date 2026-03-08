@@ -6,7 +6,14 @@ import {
   resolveColorValueRgba,
 } from './colorScales'
 
-export const SURFACE_HEIGHT_SCALE = 30
+export const SURFACE_HEIGHT_SCALE_BY_METRIC: Record<InterpolationMetric, number> = {
+  temperature: 72,
+  aqi: 55,
+}
+
+export function getSurfaceHeightScale(metric: InterpolationMetric): number {
+  return SURFACE_HEIGHT_SCALE_BY_METRIC[metric]
+}
 
 export function updateSurfaceNormalizedValues(
   frameValues: ArrayLike<number>,
