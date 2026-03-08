@@ -1,0 +1,48 @@
+[project]
+name = "helsinki_weather"
+
+[domain]
+min_lon = 24.7
+max_lon = 25.5
+min_lat = 60.1
+max_lat = 60.4
+
+[data]
+start = "2024-03-30T00:00:00Z"
+end = "2024-03-31T23:00:00Z"
+frequency = "1H"
+targets = ["temperature", "pressure", "u10", "v10"]
+
+[paths]
+training_data = "sim/training_data"
+processed = "sim/training_data/processed"
+model_runs_root = "sim/models/runs"
+inference_runs_root = "data/inference_runs"
+
+[preprocess]
+idw_k = 6
+idw_power = 2.0
+min_station_neighbors = 2
+grid_stride = 1
+dropna_targets = false
+
+[model]
+run_name = "weather_xgb_v3"
+physics_lambda = 0.2
+temperature_lapse_rate_c_per_m = 0.0065
+pressure_scale_height_m = 8434.5
+learning_rate = 0.05
+max_depth = 8
+subsample = 0.7
+colsample_bytree = 0.7
+num_boost_round = 1200
+early_stopping_rounds = 120
+validation_fraction = 0.2
+
+[inference]
+station_file = "data/current_stations.parquet"
+coarse_file = "data/current_coarse.parquet"
+dem_file = "sim/training_data/dem/cop_dem_30m.tif"
+output_stem = "downscaled"
+preview_grid_stride = 20
+prediction_batch_size = 2000

@@ -1,1 +1,13 @@
 .env
+training_data/
+media/
+*artifacts/
+*runs/
+*logs/
+*venv/
+data/downscaled/
+data/inference_runs/
+__pycache__/
+*.pyc
+*parquet
+*.egg-info/

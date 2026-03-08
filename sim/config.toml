@@ -1,0 +1,96 @@
+[domain]
+min_lon = 24.7
+max_lon = 25.4
+min_lat = 60.05
+max_lat = 60.45
+
+[time]
+start = "2024-01-01T00:00:00Z"
+end = "2024-03-31T23:00:00Z"
+frequency = "1H"
+
+[paths]
+training_data = "sim/training_data"
+processed = "sim/training_data/processed"
+model_registry = "sim/models/artifacts"
+output_dir = "data/downscaled"
+
+[era5_land]
+dataset = "reanalysis-era5-land"
+variables = [
+    "2m_temperature",
+    "surface_pressure",
+    "10m_u_component_of_wind",
+    "10m_v_component_of_wind",
+]
+
+[cams_europe]
+dataset = "cams-europe-air-quality-reanalyses"
+url = "https://ads.atmosphere.copernicus.eu/api"
+model = "ensemble"
+level = "0"
+type = "interim_reanalysis"
+data_format = "netcdf"
+variables = [
+    "particulate_matter_2.5um",
+    "nitrogen_dioxide",
+    "ozone",
+    "sulphur_dioxide",
+]
+
+[acag_pm25]
+base_url = "https://v6.gl.02.04.s3.us-west-2.amazonaws.com"
+resolution = "0p10"
+product_code = "AS"
+cadence = "Monthly"
+version = "V6GL02.04"
+
+[fmi.weather]
+query_id = "fmi::observations::weather::multipointcoverage"
+use_timeseries = true
+
+[fmi.weather.parameter_mapping]
+temperature = "Air temperature"
+pressure = "Pressure"
+wind_speed = "Wind speed"
+wind_direction = "Wind direction"
+
+[fmi.air_quality]
+query_id = "urban::observations::airquality::hourly::multipointcoverage"
+use_timeseries = true
+
+[fmi.air_quality.parameter_mapping]
+pm25 = "Particulate matter < 2.5 µm"
+aqi = "Air Quality Index"
+
+[dem]
+stac_api = "https://planetarycomputer.microsoft.com/api/stac/v1"
+collection = "cop-dem-glo-30"
+asset_preference = ["data", "dem"]
+
+[preprocess]
+idw_k = 6
+idw_power = 2.0
+min_station_neighbors = 2
+grid_stride = 1
+dropna_targets = false
+
+[model]
+targets = ["temperature", "pressure", "pm25", "u10", "v10"]
+physics_lambda = 0.2
+temperature_lapse_rate_c_per_m = 0.0065
+pressure_scale_height_m = 8434.5
+learning_rate = 0.05
+max_depth = 8
+subsample = 0.85
+colsample_bytree = 0.85
+num_boost_round = 500
+early_stopping_rounds = 40
+validation_fraction = 0.2
+
+[inference]
+station_file = "data/current_stations.parquet"
+coarse_file = "data/current_coarse.parquet"
+dem_file = "sim/training_data/dem/cop_dem_30m.tif"
+output_stem = "downscaled"
+prediction_batch_size = 50000

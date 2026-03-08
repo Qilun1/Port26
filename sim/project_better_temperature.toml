@@ -1,0 +1,65 @@
+[project]
+name = "helsinki_weather"
+
+[train]
+run_name = "weather_xgb_temp_v2"
+fetch_first = false
+
+[inference_request]
+run_name = "weather_xgb_temp_v2"
+request_name = "helsinki_paper_demo"
+start = "2024-01-15T00:00:00Z"
+end = "2024-01-15T23:00:00Z"
+min_lon = 24.95
+max_lon = 25.18
+min_lat = 60.17
+max_lat = 60.28
+grid_stride = 20
+prediction_batch_size = 50000
+station_plot_hours = 24
+station_plot_max_stations = 3
+
+[domain]
+min_lon = 24.7
+max_lon = 25.4
+min_lat = 60.05
+max_lat = 60.45
+
+[data]
+start = "2024-01-01T00:00:00Z"
+end = "2024-03-31T23:00:00Z"
+frequency = "1H"
+targets = ["temperature"]
+
+[paths]
+training_data = "sim/training_data"
+processed = "sim/training_data/processed"
+model_runs_root = "sim/models/runs"
+inference_runs_root = "data/inference_runs"
+
+[preprocess]
+idw_k = 6
+idw_power = 2.0
+min_station_neighbors = 2
+grid_stride = 1
+dropna_targets = false
+
+[model]
+physics_lambda = 0.0
+temperature_lapse_rate_c_per_m = 0.0065
+pressure_scale_height_m = 8434.5
+learning_rate = 0.03
+max_depth = 6
+subsample = 0.7
+colsample_bytree = 0.7
+num_boost_round = 1200
+early_stopping_rounds = 120
+validation_fraction = 0.2
+
+[inference]
+station_file = "data/current_stations.parquet"
+coarse_file = "data/current_coarse.parquet"
+dem_file = "sim/training_data/dem/cop_dem_30m.tif"
+output_stem = "downscaled"
+preview_grid_stride = 20
+prediction_batch_size = 50000
