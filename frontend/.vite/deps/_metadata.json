@@ -1,0 +1,46 @@
+{
+  "hash": "09b9c0fd",
+  "configHash": "bb716f8d",
+  "lockfileHash": "31339c52",
+  "browserHash": "d21d706b",
+  "optimized": {
+    "react/jsx-dev-runtime": {
+      "src": "../../node_modules/react/jsx-dev-runtime.js",
+      "file": "react_jsx-dev-runtime.js",
+      "fileHash": "549a468c",
+      "needsInterop": true
+    },
+    "react": {
+      "src": "../../node_modules/react/index.js",
+      "file": "react.js",
+      "fileHash": "8c9aaf3d",
+      "needsInterop": true
+    },
+    "react-dom/client": {
+      "src": "../../node_modules/react-dom/client.js",
+      "file": "react-dom_client.js",
+      "fileHash": "e70b28ca",
+      "needsInterop": true
+    },
+    "react-map-gl/maplibre": {
+      "src": "../../node_modules/react-map-gl/dist/esm/exports-maplibre.js",
+      "file": "react-map-gl_maplibre.js",
+      "fileHash": "e2e72ac3",
+      "needsInterop": false
+    }
+  },
+  "chunks": {
+    "chunk-AUSEWYIV": {
+      "file": "chunk-AUSEWYIV.js"
+    },
+    "chunk-2VHV66RP": {
+      "file": "chunk-2VHV66RP.js"
+    },
+    "maplibre-gl-WAOLETMS": {
+      "file": "maplibre-gl-WAOLETMS.js"
+    },
+    "chunk-5WRI5ZAA": {
+      "file": "chunk-5WRI5ZAA.js"
+    }
+  }
+}

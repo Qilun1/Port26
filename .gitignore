@@ -11,3 +11,13 @@ __pycache__/
 *.pyc
 *parquet
 *.egg-info/
+frontend/node_modules
+backend/__pycache__/
+backend/venv
+
+.cache
+dist
+build
+*.egg-info
+.pytest_cache
+__pycache__/
