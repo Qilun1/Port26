@@ -1,158 +1,110 @@
-# WeatherSens
+# WeatherSens — Urban Weather Downscaling and Sensor-Aware Environmental Mapping
 
-WeatherSens is a multi-part weather and environmental sensing project developed during the Port26 hackathon at Aalto University. The project investigates how sparse real-world weather observations and coarse meteorological fields can be combined to produce denser, more locally meaningful environmental information for urban areas.
+WeatherSens is a weather intelligence and environmental sensing project developed during the Port26 hackathon at Aalto University. The project combines sparse sensor observations, coarse meteorological fields, and spatial modelling workflows to produce denser, more locally meaningful weather information for urban environments.
 
-In practical terms, the repository brings together three connected components:
+The core motivation is straightforward: city-scale weather varies block by block, but direct observations are sparse and large-scale forecast products are often too coarse to reflect local urban effects. WeatherSens addresses this by combining observational data, interpolation, and machine-learning-based downscaling into a single workflow that supports both analysis and visualization.
 
-- a FastAPI backend for sensor and interpolation APIs
-- a React frontend for map-based visualization
-- a simulation and inference pipeline for downscaling coarse meteorological data into dense local grids
+## Features
 
-The repository is structured so the modelling workflow, serving layer, and visualization layer can evolve independently while still addressing the same core problem: how to estimate fine-scale urban weather conditions from limited direct measurements and broader-scale numerical weather data.
+| Component | Description |
+| --- | --- |
+| Simulation and Inference | Training and inference pipeline for learning local weather residual structure from meteorological source data and station observations |
+| Spatial Downscaling | Dense-grid inference over a target domain using coarse weather fields as large-scale context and observations as local correction signals |
+| Interpolation API | FastAPI service for sensor access, history queries, and inverse-distance-weighted interpolation outputs |
+| Interactive Map Frontend | React and TypeScript frontend for exploring sensors, time series, and gridded weather products in geographic context |
+| Plotting and Diagnostics | Validation plots, learning curves, map outputs, and re-plotting workflows for model inspection and presentation |
+| Live Snapshot Workflow | One-step IFS plus FMI workflow for producing a current dense weather estimate from live meteorological inputs |
 
-## Project Context
+## Dashboard Preview
 
-Urban weather and environmental conditions can vary substantially across short distances due to built form, land cover, proximity to water, traffic, and other local effects. However, direct observations are typically available only at a limited number of sensor or station locations, while numerical weather products often operate at a coarser spatial resolution than is useful for neighborhood-level analysis.
+![WeatherSens dashboard preview](map-preview.png)
 
-WeatherSens addresses this gap by exploring a workflow in which:
+WeatherSens dashboard preview showing the Helsinki-region map interface, animated 3D sensor bars, relative AQI difference overlay, time controls, and compact monitoring widgets.
 
-- station and sensor observations provide local ground-truth signals
-- coarse meteorological fields provide broader spatial and temporal context
-- statistical or machine-learning downscaling methods estimate denser near-surface conditions
-- APIs and visualization tools make those outputs easier to inspect and communicate
+The current dashboard presents WeatherSens as a dense, map-based urban weather interface rather than a conventional tabular monitoring tool. The frontend combines a dark geospatial basemap with layered environmental overlays, animated sensor bars, and time-aware controls for exploring spatial differences across the Helsinki region.
 
-The current repository focuses on the Helsinki region, but the structure is general enough to support similar workflows in other bounded urban areas.
+The interface shown in the project dashboard includes:
 
-## Problem Statement
+- metric switching between temperature and air quality views
+- 3D bar-based sensor visualization over the map surface
+- relative color encoding for spatial comparison
+- time playback controls for stepping through a full day of frames
+- a small temporal trend chart for the selected signal
+- live system indicators such as sensor availability and risk-zone display controls
 
-The central technical problem is one of spatial resolution and local representativeness. A city-scale application may need weather estimates at many more locations than are directly observed, yet naive interpolation alone may fail to capture broader meteorological structure, while coarse forecast products alone may miss local urban variation.
+This presentation layer is important to the project: the goal is not only to generate dense estimates, but also to make them interpretable at a glance in a form suitable for demonstration, comparison, and rapid decision support.
 
-This project therefore studies a combined approach:
+## Problem
 
-- use coarse meteorological data as the large-scale baseline
-- use observed station data to learn or estimate local residual structure
-- generate dense inference outputs over a spatial grid
-- expose these results through an API and interactive map interface
+Urban weather and environmental conditions can change substantially over short distances due to land cover, urban geometry, coastal influence, traffic, and other local factors. However, direct measurements are typically available only at a limited number of points, while numerical weather products often represent conditions at a much coarser resolution.
 
-From an academic or prototyping perspective, the repository can be viewed as an applied experiment in urban environmental modelling, spatial interpolation, and practical decision-support tooling.
+WeatherSens is built around this gap between what is observed and what is needed. Instead of relying only on direct interpolation or only on coarse forecast products, the project studies a combined approach in which:
 
-## Project Origin
+- coarse meteorological fields provide large-scale spatial structure
+- station and sensor observations anchor the solution in measured local conditions
+- residual modelling and inference generate denser near-surface weather estimates
+- API and frontend layers make those outputs accessible for interpretation and demonstration
 
-WeatherSens was created in the context of the Port26 hackathon at Aalto University. That origin matters to the structure of the repository: it combines rapid prototyping with a research-style workflow, where data acquisition, modelling, evaluation, API serving, and visualization are all developed together in a single working codebase.
+In that sense, WeatherSens is both an engineering prototype and an applied urban climate informatics workflow.
 
-## Repository Overview
-
-### Backend
-
-The backend exposes sensor and interpolation endpoints with FastAPI. It serves as the interface layer between the underlying data products and downstream consumers such as the frontend or external applications.
-
-Key responsibilities:
-
-- sensor metadata and latest values
-- historical sensor time series
-- inverse-distance-weighted interpolation over a spatial grid
-- API integration for the frontend or external consumers
-
-See `backend/README.md` for implementation details and SQL setup notes.
-
-### Frontend
-
-The frontend is a Vite + React + TypeScript application for map-based exploration of the sensor network and spatial weather outputs. Its role is not only presentation, but also interpretability: it makes dense predictions and measured observations easier to compare in geographic context.
-
-Key responsibilities:
-
-- interactive map rendering
-- sensor visualization and tooltips
-- frontend integration layer for sensor/weather data
-- presentation of dense spatial outputs
-
-See `frontend/README.md` for frontend-specific usage.
-
-### Simulation Pipeline
-
-The `sim/` package contains the modelling and inference workflow used to fetch source data, train residual models, run dense-grid inference, and generate diagnostic plots. This is the most research-oriented part of the repository and forms the methodological core of the project.
-
-Key responsibilities:
-
-- fetching and preprocessing meteorological data
-- training residual models
-- running dense-grid inference requests
-- live IFS snapshot inference
-- producing maps and validation plots
-
-See `sim/README.md` and `sim/USAGE.md` for the full workflow.
-
-## Research Framing
-
-Although the repository is organized as an engineering project, its internal logic is close to a compact research pipeline:
-
-- data acquisition from external meteorological and observational sources
-- preprocessing and feature construction
-- model training and validation
-- dense spatial inference over a target domain
-- visual and API-based inspection of the resulting fields
-
-This makes the project relevant to questions in urban climate informatics, spatial data science, environmental monitoring, and weather-aware digital services.
-
-## High-Level Architecture
+## Architecture
 
 ```text
-coarse weather data + station observations
-		    |
-		    v
-	  sim/ training + inference
-		    |
-		    v
-   dense outputs, plots, and derived products
-		    |
-		    +-------------------+
-		    |                   |
-		    v                   v
-	    backend API          stored artifacts
-		    |
-		    v
-	   frontend visualization
+backend/
+  FastAPI service for sensors, history, and interpolation endpoints
+frontend/
+  React + TypeScript map interface for weather and sensor visualization
+sim/
+  Data fetching, preprocessing, model training, dense inference, and plotting
+data/
+  Generated inference runs, plots, and derived artifacts
 ```
 
-## Project Layout
+## Repository Structure
 
 ```text
 backend/    FastAPI API, schemas, services, SQL, tests
 frontend/   React + TypeScript client application
 sim/        Model training, inference, plotting, workflows
 data/       Generated inference outputs and model artifacts
-sim/PLOTTING.md Plotting command reference
 ```
+
+## Project Context
+
+WeatherSens was created during the Port26 hackathon at Aalto University. The repository reflects that origin: it is a compact, end-to-end prototype that combines research-style modelling work with practical API and frontend layers in a single codebase.
+
+Although it was built in a hackathon setting, the project is structured around a serious methodological question: how can sparse observations and broad-scale meteorological context be combined to estimate urban weather more meaningfully at local scale?
+
+## Team
+
+Port26 hackathon at Aalto University
+
+Atte Laakso · Nikolas Juhava · Aarni Nordström · Manu Mäkinen · Qilun Li
 
 ## Quick Start
 
-This repo does not have a single one-command bootstrap. Start the parts you need.
-
-### 1. Backend
-
-From `backend/`:
+### Backend
 
 ```powershell
+cd backend
 uv sync
 uv run uvicorn main:app --reload
 ```
 
-Before using the API against a real database, run the SQL files in `backend/sql/` in your Supabase project and create the expected environment variables.
+Before using the backend with a real database, run the SQL files in `backend/sql/` and configure the required environment variables.
 
-### 2. Frontend
-
-From `frontend/`:
+### Frontend
 
 ```powershell
+cd frontend
 npm install
 npm run dev
 ```
 
-### 3. Simulation Pipeline
-
-From `sim/`:
+### Simulation Pipeline
 
 ```powershell
+cd sim
 uv sync
 uv run python -m sim.workflows.fetch_data --config project.toml
 uv run python -m sim.workflows.train_model --config project.toml
@@ -165,84 +117,86 @@ uv run python -m sim.workflows.run_inference_request --config project.toml
 uv run python -m sim.workflows.run_ifs_snapshot --config project.toml
 ```
 
-## Common Workflows
+## Typical Outputs
 
-### Run the API locally
+WeatherSens produces several kinds of outputs, depending on the workflow being run:
 
-```powershell
-cd backend
-uv sync
-uv run uvicorn main:app --reload
+- interpolated sensor grids served through the backend API
+- trained model artifacts and validation plots under `sim/models/runs/`
+- dense inference outputs and generated maps under `data/inference_runs/`
+- live snapshot comparison plots for quick current-condition demonstrations
+
+The path `sim/port26_sim.egg-info/` is legacy packaging metadata from an earlier internal package name and should be treated as generated output rather than edited source.
+
+## Documentation
+
+- `backend/README.md` for backend setup and endpoint details
+- `frontend/README.md` for frontend structure and local development
+- `sim/README.md` for the simulation pipeline quick reference
+- `sim/USAGE.md` for detailed modelling and inference usage
+- `sim/PLOTTING.md` for map and plotting commands
+
+## References
+
+The conceptual framing of WeatherSens is informed by literature on physics-informed machine learning, Earth system modelling, and statistical downscaling. The following BibTeX entries are included here for reference.
+
+```bibtex
+@article{raissi2019physics,
+  title={Physics-informed neural networks: A deep learning framework for solving forward and inverse problems involving nonlinear partial differential equations},
+  author={Raissi, Maziar and Perdikaris, Paris and Karniadakis, George E},
+  journal={Journal of Computational Physics},
+  volume={378},
+  pages={686--707},
+  year={2019},
+  publisher={Elsevier},
+  doi={10.1016/j.jcp.2018.10.045}
+}
+
+@article{reichstein2019deep,
+  title={Deep learning and process understanding for data-driven Earth system science},
+  author={Reichstein, Markus and Camps-Valls, Gustau and Stevens, Bjorn and Jung, Martin and Denzler, Joachim and Carvalhais, Nuno and Prabhat},
+  journal={Nature},
+  volume={566},
+  number={7743},
+  pages={195--204},
+  year={2019},
+  publisher={Nature Publishing Group UK London},
+  doi={10.1038/s41586-019-0912-1}
+}
+
+@article{kashinath2021physics,
+  title={Physics-informed machine learning for weather and climate modelling},
+  author={Kashinath, Karthik and Mustafa, Mustafa and Albert, Adrian and Wu, Jiulin and Jiang, Chiyu and Esmaeilzadeh, Soheil and Azizzadenesheli, Kamyar and Wang, Rui and Chattopadhyay, Ashesh and Singh, Amit and others},
+  journal={Philosophical Transactions of the Royal Society A},
+  volume={379},
+  number={2194},
+  pages={20200093},
+  year={2021},
+  publisher={The Royal Society},
+  doi={10.1098/rsta.2020.0093}
+}
+
+@inproceedings{vandal2017deepsd,
+  title={DeepSD: Generating high resolution climate change projections through single image super-resolution},
+  author={Vandal, Thomas and Dai, Evan and Dy, Jennifer and Ganguly, Auroop R and Ness, Amina and Kumar, Vipin},
+  booktitle={Proceedings of the 23rd ACM SIGKDD International Conference on Knowledge Discovery and Data Mining},
+  pages={1663--1672},
+  year={2017},
+  doi={10.1145/3097983.3098004}
+}
+
+@article{liston2006meteorological,
+  title={A meteorological distribution system for high-resolution terrestrial modeling (MicroMet)},
+  author={Liston, Glen E and Elder, Kelly},
+  journal={Journal of Hydrometeorology},
+  volume={7},
+  number={2},
+  pages={217--234},
+  year={2006},
+  publisher={American Meteorological Society},
+  doi={10.1175/JHM486.1}
+}
 ```
-
-### Run the frontend locally
-
-```powershell
-cd frontend
-npm install
-npm run dev
-```
-
-### Train a model
-
-```powershell
-cd sim
-uv sync
-uv run python -m sim.workflows.train_model --config project.toml
-```
-
-### Run one live IFS inference snapshot
-
-```powershell
-cd sim
-uv run python -m sim.workflows.run_ifs_snapshot --config project.toml
-```
-
-### Rebuild maps from existing outputs
-
-```powershell
-cd sim
-uv run python -m sim.workflows.plot_maps --config project.toml --request-dir ../data/inference_runs/<request_name>
-```
-
-## Requirements
-
-The exact requirements vary by subproject, but the repo currently expects:
-
-- Python 3.13 for the backend and simulation code
-- `uv` for Python dependency management
-- Node.js for the frontend
-- Supabase for backend persistence
-- external weather/data credentials for parts of the simulation workflow
-
-## Data And Generated Outputs
-
-The repo contains generated and derived outputs under locations such as:
-
-- `data/inference_runs/`
-- `sim/models/runs/`
-- `sim/port26_sim.egg-info/` (legacy packaging name)
-
-Treat these as outputs or packaging artifacts unless a specific workflow tells you to edit them.
-
-## Testing
-
-Backend tests live under `backend/tests/`.
-
-Typical test command:
-
-```powershell
-cd backend
-uv run pytest tests
-```
-
-## Documentation Index
-
-- `backend/README.md`: API setup and endpoint notes
-- `frontend/README.md`: frontend setup and structure
-- `sim/README.md`: simulation pipeline quick reference
-- `sim/USAGE.md`: detailed simulation usage
-- `sim/PLOTTING.md`: plotting command cheatsheet
 
 ## License
 
