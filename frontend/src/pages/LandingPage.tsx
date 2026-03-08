@@ -7,6 +7,7 @@ export function LandingPage() {
   const studyHref = `${import.meta.env.BASE_URL}weathersens_study.pdf`
   const flowVideoHref = `${import.meta.env.BASE_URL}PerfectlyAlignedWeatherFlow.mp4`
   const uiPreviewHref = `${import.meta.env.BASE_URL}map-preview.png`
+  const sensorPhotoHref = `${import.meta.env.BASE_URL}sensor.png`
 
   return (
     <main className="landing-page" aria-label="About WeatherSens">
@@ -155,6 +156,32 @@ export function LandingPage() {
               <li>Compact controls keep the focus on geographic interpretation and city health context</li>
             </ul>
           </div>
+        </article>
+
+        <article className="landing-page__panel landing-page__panel--wide landing-page__proof-block">
+          <div className="landing-page__proof-copy">
+            <p className="landing-page__feature-kicker">Technical Feasibility</p>
+            <h2>Grounded in real sensor hardware.</h2>
+            <p>
+              WeatherSens is built around real environmental sensing hardware used to collect local
+              measurements in the field. The sensor platform shown here predates the hackathon and
+              demonstrates the practical data-collection basis of the system.
+            </p>
+            <p>
+              The hackathon work focused on turning those measurements into an integrated pipeline
+              for interpolation, modelling, API delivery, and map-based decision support.
+            </p>
+          </div>
+          <figure className="landing-page__proof-media">
+            <img
+              className="landing-page__proof-image"
+              src={sensorPhotoHref}
+              alt="Environmental sensor hardware mounted outdoors"
+            />
+            <figcaption className="landing-page__proof-caption">
+              Environmental sensor hardware used in the WeatherSens workflow.
+            </figcaption>
+          </figure>
         </article>
       </section>
     </main>
