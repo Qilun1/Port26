@@ -139,3 +139,7 @@ Use [sim/USAGE.md](sim/USAGE.md) for:
 - direct module commands
 - inference input format details
 - common failure modes
+
+## License
+
+The contents of `sim/` are licensed under the MIT License. See `sim/LICENSE` for details.
