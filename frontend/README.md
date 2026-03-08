@@ -1,6 +1,6 @@
 # Helsinki Weather Sensor Map MVP (Frontend)
 
-Frontend-only MVP for visualizing a mock dense weather sensor network in the Helsinki region.
+Frontend-only MVP for visualizing a dense weather sensor network in the Helsinki region.
 
 ## Stack
 
